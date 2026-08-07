@@ -1,21 +1,20 @@
 package cli
 
 import (
-	"fmt"
-
 	"github.com/spf13/cobra"
 )
 
-func newPlanCmd() *cobra.Command {
+func newPlanCmd(f *sharedFlags) *cobra.Command {
 	return &cobra.Command{
 		Use:   "plan [path]",
 		Short: "Scan and print a plan without prompting",
 		Args:  cobra.MaximumNArgs(1),
-		RunE:  runPlan,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runPlan(cmd, args, f)
+		},
 	}
 }
 
-func runPlan(cmd *cobra.Command, _ []string) error {
-	fmt.Fprintln(cmd.ErrOrStderr(), "plan: not implemented yet")
-	return nil
+func runPlan(cmd *cobra.Command, args []string, f *sharedFlags) error {
+	return runPlanDry(cmd, args, f)
 }
