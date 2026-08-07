@@ -1,0 +1,19 @@
+name: rust
+description: Rust projects (Cargo)
+priority: 10
+
+detect:
+  all:
+    - file_exists: Cargo.toml
+    - any:
+        - toml_path:
+            file: Cargo.toml
+            path: package
+        - toml_path:
+            file: Cargo.toml
+            path: workspace
+
+targets:
+  - path: target
+    reason: Cargo build output
+    regenerate: cargo build

@@ -1,0 +1,11 @@
+name: maven
+description: Apache Maven projects
+priority: 10
+
+detect:
+  file_exists: pom.xml
+
+targets:
+  - path: target
+    reason: Maven build output
+    regenerate: mvn package

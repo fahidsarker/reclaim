@@ -6,9 +6,14 @@ import (
 	"testing"
 
 	"github.com/fahid/reclaim/internal/detect"
-	_ "github.com/fahid/reclaim/internal/detect/builtin"
 	"github.com/fahid/reclaim/internal/scan"
 )
+
+func TestMain(m *testing.M) {
+	detect.ResetRegistryForTest()
+	detect.MustLoadEmbedded()
+	os.Exit(m.Run())
+}
 
 func TestNodeJS_Strong(t *testing.T) {
 	dir := t.TempDir()
@@ -23,6 +28,9 @@ func TestNodeJS_Strong(t *testing.T) {
 	}
 	if m == nil || m.Confidence != detect.ConfidenceStrong {
 		t.Fatalf("want strong match, got %+v", m)
+	}
+	if m.Framework != "nodejs" {
+		t.Fatalf("framework: %s", m.Framework)
 	}
 	if len(m.Targets) != 1 || m.Targets[0].RelPath != "node_modules" {
 		t.Fatalf("targets: %+v", m.Targets)
@@ -43,8 +51,8 @@ func TestNodeJS_WeakCorrupt(t *testing.T) {
 	if m == nil || m.Confidence != detect.ConfidenceWeak {
 		t.Fatalf("want weak match, got %+v", m)
 	}
-	if len(m.Targets) != 0 {
-		t.Fatalf("weak must have no targets: %+v", m.Targets)
+	if len(m.Targets) == 0 {
+		t.Fatal("weak match should expose would-be targets")
 	}
 }
 

@@ -1,0 +1,47 @@
+name: nextjs
+description: Next.js applications
+priority: 20
+extends: nodejs
+
+detect:
+  any:
+    - file_exists: next.config.js
+    - file_exists: next.config.mjs
+    - file_exists: next.config.ts
+    - file_exists: next.config.cjs
+    - json_path:
+        file: package.json
+        path: dependencies.next
+    - json_path:
+        file: package.json
+        path: devDependencies.next
+
+targets:
+  - path: .next
+    reason: Next.js build cache and output
+    regenerate: next build
+  - path: out
+    reason: Next.js static export output
+    regenerate: next export
+    when:
+      any:
+        - file_contains:
+            file: next.config.js
+            pattern: "output.*export"
+        - file_contains:
+            file: next.config.mjs
+            pattern: "output.*export"
+        - file_contains:
+            file: next.config.ts
+            pattern: "output.*export"
+        - file_contains:
+            file: next.config.cjs
+            pattern: "output.*export"
+
+metadata:
+  packageManager:
+    from_file_exists:
+      pnpm-lock.yaml: pnpm
+      yarn.lock: yarn
+      bun.lockb: bun
+      package-lock.json: npm

@@ -1,0 +1,11 @@
+name: turborepo
+description: Turborepo monorepos
+priority: 15
+
+detect:
+  file_exists: turbo.json
+
+targets:
+  - path: .turbo
+    reason: Turborepo cache
+    regenerate: turbo run build

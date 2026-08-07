@@ -1,0 +1,23 @@
+name: nodejs
+description: Node.js projects
+priority: 10
+
+detect:
+  all:
+    - file_exists: package.json
+    - json_path:
+        file: package.json
+        path: ""
+
+targets:
+  - path: node_modules
+    reason: Node.js dependency cache
+    regenerate: npm install
+
+metadata:
+  packageManager:
+    from_file_exists:
+      pnpm-lock.yaml: pnpm
+      yarn.lock: yarn
+      bun.lockb: bun
+      package-lock.json: npm

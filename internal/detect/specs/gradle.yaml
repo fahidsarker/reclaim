@@ -1,0 +1,18 @@
+name: gradle
+description: Gradle projects
+priority: 10
+
+detect:
+  any:
+    - file_exists: build.gradle
+    - file_exists: build.gradle.kts
+    - file_exists: settings.gradle
+    - file_exists: settings.gradle.kts
+
+targets:
+  - path: build
+    reason: Gradle build output
+    regenerate: gradle build
+  - path: .gradle
+    reason: Gradle project cache
+    regenerate: gradle build

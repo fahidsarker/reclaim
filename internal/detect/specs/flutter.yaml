@@ -1,0 +1,38 @@
+name: flutter
+description: Flutter applications
+priority: 20
+
+detect:
+  all:
+    - file_exists: pubspec.yaml
+    - yaml_path:
+        file: pubspec.yaml
+        path: flutter
+
+targets:
+  - path: build
+    reason: Flutter build output
+    regenerate: flutter build
+  - path: .dart_tool
+    reason: Dart tool cache
+    regenerate: flutter pub get
+  - path: .flutter-plugins
+    reason: Flutter plugins registry
+    regenerate: flutter pub get
+  - path: .flutter-plugins-dependencies
+    reason: Flutter plugins dependencies
+    regenerate: flutter pub get
+  - path: ios/Pods
+    reason: iOS CocoaPods dependencies
+    regenerate: pod install
+    safety: requires_flag
+  - path: ios/.symlinks
+    reason: Flutter iOS symlinks
+    regenerate: flutter pub get
+  - path: android/.gradle
+    reason: Android Gradle cache
+    regenerate: flutter build apk
+  - path: macos/Pods
+    reason: macOS CocoaPods dependencies
+    regenerate: pod install
+    safety: requires_flag

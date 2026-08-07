@@ -8,17 +8,18 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/bmatcuk/doublestar/v4"
 	"github.com/fahid/reclaim/internal/detect"
 	"github.com/fahid/reclaim/internal/rules"
 )
 
 // Options controls directory walking.
 type Options struct {
-	Root              string
-	MaxDepth          int
-	Concurrency       int
-	FollowSymlinks    bool
-	IKnowWhatImDoing  bool
+	Root             string
+	MaxDepth         int
+	Concurrency      int
+	FollowSymlinks   bool
+	IKnowWhatImDoing bool
 }
 
 // CandidateKind classifies a walk finding before plan evaluation.
@@ -103,9 +104,9 @@ func Walk(opts Options) (*Result, error) {
 	res := &Result{Root: abs}
 	queue := []walkFrame{{dir: abs, depth: 0, parent: nil}}
 
-	// Known artifact basenames we never descend into (Phase 1: node_modules).
-	pruneBasenames := map[string]struct{}{
-		"node_modules": {},
+	pruneBasenames := map[string]struct{}{}
+	for _, b := range detect.PruneBasenames() {
+		pruneBasenames[b] = struct{}{}
 	}
 
 	for len(queue) > 0 {
@@ -140,7 +141,10 @@ func Walk(opts Options) (*Result, error) {
 		}
 
 		var project *detect.Project
-		targetRel := map[string]struct{}{}
+		// Paths (relative) owned by this directory's match — do not orphan-report them.
+		ownedRel := map[string]struct{}{}
+		// First path segments to prune under this directory.
+		localPrune := map[string]struct{}{}
 
 		switch {
 		case match != nil && match.Confidence == detect.ConfidenceStrong:
@@ -154,46 +158,42 @@ func Walk(opts Options) (*Result, error) {
 			}
 			res.Projects = append(res.Projects, project)
 
-			for _, t := range match.Targets {
-				absTarget := filepath.Join(frame.dir, t.RelPath)
-				t.Path = absTarget
-				targetRel[t.RelPath] = struct{}{}
-				pruneBasenames[filepath.Base(t.RelPath)] = struct{}{}
-
-				if exists, isLink := pathExists(cache, absTarget); exists {
-					if isLink {
-						// Symlink targets are listed but never traversed; still a candidate for plan/safety.
-						res.Candidates = append(res.Candidates, Candidate{
-							Kind:    KindDeleteCandidate,
-							Project: project,
-							Target:  t,
-						})
-					} else {
-						res.Candidates = append(res.Candidates, Candidate{
-							Kind:    KindDeleteCandidate,
-							Project: project,
-							Target:  t,
-						})
-					}
+			expanded, err := expandMatchTargets(cache, frame.dir, match.Targets)
+			if err != nil {
+				return nil, err
+			}
+			for _, t := range expanded {
+				ownedRel[t.RelPath] = struct{}{}
+				seg := firstPathSeg(t.RelPath)
+				if seg != "" {
+					pruneBasenames[seg] = struct{}{}
+					localPrune[seg] = struct{}{}
 				}
+				res.Candidates = append(res.Candidates, Candidate{
+					Kind:    KindDeleteCandidate,
+					Project: project,
+					Target:  t,
+				})
 			}
 
 		case match != nil && match.Confidence == detect.ConfidenceWeak:
-			// Corrupt manifest: if node_modules exists, skip it loudly.
-			nm := filepath.Join(frame.dir, "node_modules")
-			if exists, _ := pathExists(cache, nm); exists {
+			expanded, err := expandMatchTargets(cache, frame.dir, match.Targets)
+			if err != nil {
+				return nil, err
+			}
+			for _, t := range expanded {
+				ownedRel[t.RelPath] = struct{}{}
+				seg := firstPathSeg(t.RelPath)
+				if seg != "" {
+					pruneBasenames[seg] = struct{}{}
+					localPrune[seg] = struct{}{}
+				}
 				res.Candidates = append(res.Candidates, Candidate{
-					Kind: KindWeak,
-					Target: detect.Target{
-						Path:    nm,
-						RelPath: "node_modules",
-						Kind:    detect.KindDir,
-						Reason:  "Node.js dependency cache",
-					},
-					Reason: "corrupt or unparseable package.json (weak match)",
+					Kind:   KindWeak,
+					Target: t,
+					Reason: "corrupt or unparseable manifest (weak match)",
 				})
 			}
-			targetRel["node_modules"] = struct{}{}
 		}
 
 		entries, err := cache.ReadDir(frame.dir)
@@ -213,12 +213,15 @@ func Walk(opts Options) (*Result, error) {
 			}
 			child := filepath.Join(frame.dir, name)
 
-			// Never descend into candidate / orphan artifact dirs.
 			if _, prune := pruneBasenames[name]; prune {
-				if _, isTarget := targetRel[name]; isTarget {
+				// Owned by current match (exact basename or nested under first segment).
+				if _, local := localPrune[name]; local {
 					continue
 				}
-				// Orphan: artifact present without a Strong project owning it.
+				if ownedByRel(ownedRel, name) {
+					continue
+				}
+				// Orphan: known artifact without a Strong/Weak owner in this directory.
 				if project == nil {
 					if e.IsDir() || (e.Type()&fs.ModeSymlink) != 0 {
 						if match == nil || match.Confidence != detect.ConfidenceWeak {
@@ -228,9 +231,8 @@ func Walk(opts Options) (*Result, error) {
 									Path:    child,
 									RelPath: name,
 									Kind:    detect.KindDir,
-									Reason:  "Node.js dependency cache",
 								},
-								Reason: "orphaned: no readable, parseable package.json in the same directory",
+								Reason: "orphaned: no validated project in the same directory",
 							})
 						}
 					}
@@ -246,12 +248,10 @@ func Walk(opts Options) (*Result, error) {
 				if !opts.FollowSymlinks {
 					continue
 				}
-				// FollowSymlinks not fully wired in Phase 1 beyond allowing descent.
 			}
 			if !info.IsDir() && !isSymlink(info) {
 				continue
 			}
-			// Only enqueue directories (or followed symlink dirs).
 			if !info.IsDir() {
 				target, err := cache.Stat(child)
 				if err != nil || !target.IsDir() {
@@ -269,6 +269,66 @@ func Walk(opts Options) (*Result, error) {
 
 	_ = opts.Concurrency // reserved for parallel detect; walk is sequential for attribution
 	return res, nil
+}
+
+func expandMatchTargets(cache *DirCache, dir string, targets []detect.Target) ([]detect.Target, error) {
+	var out []detect.Target
+	for _, t := range targets {
+		switch t.Kind {
+		case detect.KindGlob:
+			pattern := filepath.ToSlash(t.RelPath)
+			matches, err := doublestar.Glob(os.DirFS(dir), pattern)
+			if err != nil {
+				continue
+			}
+			for _, m := range matches {
+				rel := filepath.FromSlash(m)
+				absTarget := filepath.Join(dir, rel)
+				if exists, _ := pathExists(cache, absTarget); !exists {
+					continue
+				}
+				ct := t
+				ct.RelPath = rel
+				ct.Path = absTarget
+				ct.Kind = detect.KindDir
+				out = append(out, ct)
+			}
+		default:
+			absTarget := filepath.Join(dir, t.RelPath)
+			if exists, _ := pathExists(cache, absTarget); !exists {
+				continue
+			}
+			ct := t
+			ct.Path = absTarget
+			out = append(out, ct)
+		}
+	}
+	return out, nil
+}
+
+func firstPathSeg(rel string) string {
+	rel = filepath.ToSlash(rel)
+	if rel == "" {
+		return ""
+	}
+	return strings.SplitN(rel, "/", 2)[0]
+}
+
+func ownedByRel(owned map[string]struct{}, name string) bool {
+	if _, ok := owned[name]; ok {
+		return true
+	}
+	prefix := name + string(filepath.Separator)
+	slashPrefix := name + "/"
+	for rel := range owned {
+		if rel == name {
+			return true
+		}
+		if strings.HasPrefix(rel, prefix) || strings.HasPrefix(filepath.ToSlash(rel), slashPrefix) {
+			return true
+		}
+	}
+	return false
 }
 
 func isSymlink(info fs.FileInfo) bool {

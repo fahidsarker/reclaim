@@ -5,10 +5,11 @@ import (
 	"os"
 
 	"github.com/fahid/reclaim/internal/cli"
-	_ "github.com/fahid/reclaim/internal/detect/builtin"
+	"github.com/fahid/reclaim/internal/detect"
 )
 
 func main() {
+	detect.MustLoadEmbedded()
 	if err := cli.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)

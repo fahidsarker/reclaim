@@ -5,10 +5,15 @@ import (
 	"path/filepath"
 	"testing"
 
-	_ "github.com/fahid/reclaim/internal/detect/builtin"
+	"github.com/fahid/reclaim/internal/detect"
 	"github.com/fahid/reclaim/internal/plan"
 	"github.com/fahid/reclaim/internal/scan"
 )
+
+func TestMain(m *testing.M) {
+	detect.MustLoadEmbedded()
+	os.Exit(m.Run())
+}
 
 func TestWalk_PositiveNodeProject(t *testing.T) {
 	root := t.TempDir()

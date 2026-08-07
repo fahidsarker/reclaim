@@ -1,0 +1,36 @@
+name: python
+description: Python projects
+priority: 10
+
+detect:
+  any:
+    - file_exists: pyproject.toml
+    - file_exists: setup.py
+    - file_exists: setup.cfg
+    - file_exists: requirements.txt
+
+targets:
+  - path: "**/__pycache__"
+    reason: Python bytecode cache
+    regenerate: python -m compileall
+  - path: .pytest_cache
+    reason: pytest cache
+    regenerate: pytest
+  - path: .mypy_cache
+    reason: mypy cache
+    regenerate: mypy
+  - path: .ruff_cache
+    reason: ruff cache
+    regenerate: ruff check
+  - path: .ipynb_checkpoints
+    reason: Jupyter checkpoint cache
+    regenerate: ""
+  - path: "*.egg-info"
+    reason: Python egg-info metadata
+    regenerate: pip install -e .
+  - path: build
+    reason: Python build output
+    regenerate: python -m build
+  - path: dist
+    reason: Python distribution output
+    regenerate: python -m build

@@ -1,4 +1,4 @@
 package builtin
 
-// Package builtin registers Tier-2 Go detectors.
-// Import this package (blank) from main so init() registration runs.
+// Package builtin is reserved for Tier-2 Go detectors (Phase 7+).
+// Declarative YAML specs are loaded via detect.MustLoadEmbedded() from main.

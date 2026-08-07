@@ -77,6 +77,15 @@ func Build(res *scan.Result) *Plan {
 				})
 				continue
 			}
+			if c.Target.Safety == detect.SafetyRequiresFlag {
+				p.Decisions = append(p.Decisions, Decision{
+					Project: c.Project,
+					Target:  c.Target,
+					Verdict: VerdictSkipped,
+					Reason:  "requires --aggressive",
+				})
+				continue
+			}
 			p.Decisions = append(p.Decisions, Decision{
 				Project: c.Project,
 				Target:  c.Target,
