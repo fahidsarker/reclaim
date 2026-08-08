@@ -47,9 +47,10 @@ type Plan struct {
 	Decisions []Decision
 }
 
-// Build turns walk candidates into decisions using safety rules (Phase 1: no git).
+// Build turns walk candidates into decisions using safety and git rules.
 func Build(res *scan.Result) *Plan {
 	p := &Plan{Root: res.Root}
+	gitCache := rules.NewGitCache()
 
 	for _, c := range res.Candidates {
 		switch c.Kind {
@@ -86,6 +87,22 @@ func Build(res *scan.Result) *Plan {
 				})
 				continue
 			}
+
+			attachGitRepo(c.Project, gitCache)
+			var gitRepo *rules.GitRepo
+			if c.Project != nil {
+				gitRepo = gitCache.RepoFor(c.Project.Root)
+			}
+			if reason := rules.CheckGit(gitRepo, c.Target.Path); reason != "" {
+				p.Decisions = append(p.Decisions, Decision{
+					Project: c.Project,
+					Target:  c.Target,
+					Verdict: VerdictSkipped,
+					Reason:  reason,
+				})
+				continue
+			}
+
 			p.Decisions = append(p.Decisions, Decision{
 				Project: c.Project,
 				Target:  c.Target,
@@ -98,7 +115,18 @@ func Build(res *scan.Result) *Plan {
 	return p
 }
 
-// WriteHuman prints a simple Phase-1 plan listing to w.
+func attachGitRepo(project *detect.Project, cache *rules.GitCache) {
+	if project == nil || project.GitRepo != nil {
+		return
+	}
+	r := cache.RepoFor(project.Root)
+	if r == nil {
+		return
+	}
+	project.GitRepo = &detect.GitRepo{Root: r.Root}
+}
+
+// WriteHuman prints a plan listing to w.
 func WriteHuman(w io.Writer, p *Plan) error {
 	var deletes, skips []Decision
 	for _, d := range p.Decisions {
@@ -156,8 +184,15 @@ func WriteHuman(w io.Writer, p *Plan) error {
 			return err
 		}
 		for _, d := range skips {
-			if _, err := fmt.Fprintf(w, "  %s\n    %s\n", d.Target.Path, d.Reason); err != nil {
-				return err
+			hint := rules.HintForReason(d.Reason, filepath.Base(d.Target.Path))
+			if hint != "" {
+				if _, err := fmt.Fprintf(w, "  %s    %s    → %s\n", d.Target.Path, d.Reason, hint); err != nil {
+					return err
+				}
+			} else {
+				if _, err := fmt.Fprintf(w, "  %s    %s\n", d.Target.Path, d.Reason); err != nil {
+					return err
+				}
 			}
 		}
 		if _, err := fmt.Fprintln(w); err != nil {

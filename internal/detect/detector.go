@@ -30,6 +30,11 @@ const (
 	SafetyRequiresFlag
 )
 
+// GitRepo identifies the enclosing git worktree, if any.
+type GitRepo struct {
+	Root string // absolute path to worktree root
+}
+
 // Project is a directory positively identified by a detector.
 type Project struct {
 	Root       string
@@ -37,6 +42,7 @@ type Project struct {
 	Confidence Confidence
 	Manifest   string
 	Metadata   map[string]string
+	GitRepo    *GitRepo // nil if not under version control
 	Parent     *Project
 }
 

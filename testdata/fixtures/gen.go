@@ -2,8 +2,13 @@
 package fixtures
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"time"
+
+	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing/object"
 )
 
 // WriteFile writes content to path, creating parent directories.
@@ -186,6 +191,35 @@ func Decoy(dir string, artifacts ...string) error {
 		if err := Mkdir(filepath.Join(dir, a)); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// GitInit initialises a git repository at dir and commits the given relative paths.
+// Paths may be files or directories. Does not require a system git binary.
+func GitInit(dir string, paths ...string) error {
+	repo, err := git.PlainInit(dir, false)
+	if err != nil {
+		return fmt.Errorf("git init: %w", err)
+	}
+	wt, err := repo.Worktree()
+	if err != nil {
+		return fmt.Errorf("worktree: %w", err)
+	}
+	for _, p := range paths {
+		if _, err := wt.Add(filepath.ToSlash(p)); err != nil {
+			return fmt.Errorf("git add %s: %w", p, err)
+		}
+	}
+	_, err = wt.Commit("fixture init", &git.CommitOptions{
+		Author: &object.Signature{
+			Name:  "reclaim-test",
+			Email: "reclaim@test",
+			When:  time.Now(),
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("git commit: %w", err)
 	}
 	return nil
 }
