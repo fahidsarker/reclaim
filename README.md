@@ -211,14 +211,6 @@ Human output groups reclaimable targets by project (largest first), then a **Ski
 
 Mutating runs append an audit journal to `~/.local/state/reclaim/history.jsonl` (read UI deferred).
 
-## Out of scope (v0.1)
-
-Deferred intentionally (see [spec.md §15](spec.md)):
-
-- No `--restore` / post-delete reinstall
-- No `reclaim global` for tool caches (`~/.cargo/registry`, npm cacache, Xcode DerivedData, …)
-- Network / remote filesystems are not a special case — they may simply be slow
-
 ## Development
 
 ```sh
