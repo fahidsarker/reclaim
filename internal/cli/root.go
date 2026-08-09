@@ -13,6 +13,7 @@ type sharedFlags struct {
 	concurrency      int
 	dryRun           bool
 	yes              bool
+	toTrash          bool
 	noSize           bool
 	noColor          bool
 	iKnowWhatImDoing bool
@@ -58,6 +59,7 @@ func newRootCmd() *cobra.Command {
 	pf.IntVar(&f.concurrency, "concurrency", defaultConcurrency(), "walker parallelism")
 	pf.BoolVarP(&f.dryRun, "dry-run", "n", false, "print the plan and exit without deleting")
 	pf.BoolVarP(&f.yes, "yes", "y", false, "skip the confirmation prompt")
+	pf.BoolVar(&f.toTrash, "to-trash", false, "send targets to the OS trash instead of permanent delete")
 	pf.BoolVar(&f.noSize, "no-size", false, "skip size computation")
 	pf.BoolVar(&f.noColor, "no-color", false, "disable coloured output")
 	pf.BoolVar(&f.iKnowWhatImDoing, "i-know-what-im-doing", false, "allow scanning / or $HOME")
@@ -75,10 +77,6 @@ func resolvePath(args []string) string {
 		return "."
 	}
 	return args[0]
-}
-
-func errExecuteUnavailable() error {
-	return exitErrorf(1, "deletion is not implemented yet; use `reclaim plan` or `reclaim scan --dry-run` to list candidates")
 }
 
 // ExitCode returns the process exit code for err, defaulting to 1.

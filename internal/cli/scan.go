@@ -1,10 +1,15 @@
 package cli
 
 import (
+	"context"
+	"fmt"
+	"os"
+	"os/signal"
 	"time"
 
 	"github.com/spf13/cobra"
 
+	"github.com/fahid/reclaim/internal/exec"
 	"github.com/fahid/reclaim/internal/plan"
 	"github.com/fahid/reclaim/internal/scan"
 	"github.com/fahid/reclaim/internal/ui"
@@ -46,7 +51,33 @@ func runScan(cmd *cobra.Command, args []string, f *sharedFlags) error {
 		}
 	}
 
-	return errExecuteUnavailable()
+	return runExecute(cmd, p, f)
+}
+
+func runExecute(cmd *cobra.Command, p *plan.Plan, f *sharedFlags) error {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer stop()
+
+	res, err := exec.Run(p, exec.Options{
+		Root:    p.Root,
+		ToTrash: f.toTrash,
+		Yes:     f.yes,
+		Context: ctx,
+		Warn:    cmd.ErrOrStderr(),
+	})
+	if err != nil {
+		return err
+	}
+
+	summary := exec.SummaryLine(res)
+	if summary != "" {
+		fmt.Fprintln(cmd.OutOrStdout(), summary)
+	}
+
+	if res.Failed() {
+		return exitErrorf(4, "%s", summary)
+	}
+	return nil
 }
 
 func runPlanDry(cmd *cobra.Command, args []string, f *sharedFlags) error {
