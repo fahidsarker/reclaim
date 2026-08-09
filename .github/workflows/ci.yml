@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # Weekly longer fuzz (Monday 06:00 UTC).
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+jobs:
+  test:
+    if: github.event_name != 'schedule'
+    name: test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Test
+        run: go test ./internal/rules ./internal/exec ./...
+      - name: Short fuzz
+        if: runner.os != 'Windows'
+        run: |
+          go test ./internal/config -run=^$$ -fuzz=FuzzParseControl -fuzztime=5s
+          go test ./internal/config -run=^$$ -fuzz=FuzzMatchPattern -fuzztime=5s
+
+  cross-exec:
+    if: github.event_name != 'schedule'
+    name: cross-compile exec trash shims
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Compile internal/exec for linux/darwin/windows
+        run: |
+          mkdir -p bin/smoke
+          GOOS=linux GOARCH=amd64 go test -c -o bin/smoke/exec_linux.test ./internal/exec
+          GOOS=darwin GOARCH=amd64 go test -c -o bin/smoke/exec_darwin.test ./internal/exec
+          GOOS=windows GOARCH=amd64 go test -c -o bin/smoke/exec_windows.test ./internal/exec
+
+  fuzz:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    name: fuzz (scheduled)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Fuzz control parser and pattern matcher
+        run: |
+          go test ./internal/config -run=^$$ -fuzz=FuzzParseControl -fuzztime=60s
+          go test ./internal/config -run=^$$ -fuzz=FuzzMatchPattern -fuzztime=60s

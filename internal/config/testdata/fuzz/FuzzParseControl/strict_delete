@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("version: 1\nmode: strict\ndelete:\n  - path: build/\n    reason: custom\nrequire_git_ignored: false\n")
