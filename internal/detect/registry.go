@@ -28,6 +28,12 @@ func Detectors() []Detector {
 // match. When several match, targets are unioned and deduplicated by RelPath;
 // priority decides Framework and Metadata.
 func DetectBest(ctx *Context, dir string) (*Match, error) {
+	return DetectBestFiltered(ctx, dir, nil, nil)
+}
+
+// DetectBestFiltered is DetectBest with optional framework allow/deny lists
+// from a .reclaim.yaml frameworks: block.
+func DetectBestFiltered(ctx *Context, dir string, only, disable []string) (*Match, error) {
 	registryMu.RLock()
 	list := make([]Detector, len(detectors))
 	copy(list, detectors)
@@ -39,6 +45,9 @@ func DetectBest(ctx *Context, dir string) (*Match, error) {
 	var union []Target
 
 	for _, d := range list {
+		if !frameworkAllowed(d.Name(), only, disable) {
+			continue
+		}
 		m, err := d.Detect(ctx, dir)
 		if err != nil {
 			return nil, err
@@ -68,4 +77,25 @@ func DetectBest(ctx *Context, dir string) (*Match, error) {
 	out := *best
 	out.Targets = union
 	return &out, nil
+}
+
+func frameworkAllowed(name string, only, disable []string) bool {
+	if len(only) > 0 {
+		ok := false
+		for _, f := range only {
+			if f == name {
+				ok = true
+				break
+			}
+		}
+		if !ok {
+			return false
+		}
+	}
+	for _, f := range disable {
+		if f == name {
+			return false
+		}
+	}
+	return true
 }

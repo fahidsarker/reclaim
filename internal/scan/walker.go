@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/bmatcuk/doublestar/v4"
+	"github.com/fahid/reclaim/internal/config"
 	"github.com/fahid/reclaim/internal/detect"
 	"github.com/fahid/reclaim/internal/rules"
 )
@@ -20,6 +21,7 @@ type Options struct {
 	Concurrency      int
 	FollowSymlinks   bool
 	IKnowWhatImDoing bool
+	NoConfig         bool // ignore .reclaim.yaml and global config
 }
 
 // CandidateKind classifies a walk finding before plan evaluation.
@@ -36,10 +38,12 @@ const (
 
 // Candidate is a target discovered during the walk, before safety/git evaluation.
 type Candidate struct {
-	Kind    CandidateKind
-	Project *detect.Project // nil for orphans
-	Target  detect.Target
-	Reason  string // set for KindOrphan / KindWeak
+	Kind           CandidateKind
+	Project        *detect.Project // nil for orphans
+	Target         detect.Target
+	Reason         string // set for KindOrphan / KindWeak
+	Control        *config.Chain
+	ExplicitDelete bool // matched a delete: rule (git / SafetyRequiresFlag bypass)
 }
 
 // Result is the outcome of a walk.
@@ -63,9 +67,10 @@ func DefaultConcurrency() int {
 }
 
 type walkFrame struct {
-	dir    string
-	depth  int
-	parent *detect.Project
+	dir     string
+	depth   int
+	parent  *detect.Project
+	control *config.Chain
 }
 
 // Walk recursively scans root for reclaimable candidates. It never deletes.
@@ -98,11 +103,24 @@ func Walk(opts Options) (*Result, error) {
 		return nil, fmt.Errorf("scan root is a symlink (pass --follow-symlinks to allow): %s", abs)
 	}
 
+	var (
+		rootChain    *config.Chain
+		globalConfig *config.Global
+	)
+	if !opts.NoConfig {
+		g, err := config.LoadGlobal(abs)
+		if err != nil {
+			return nil, fmt.Errorf("load global config: %w", err)
+		}
+		globalConfig = g
+		rootChain = &config.Chain{Global: g}
+	}
+
 	cache := NewDirCache()
 	ctx := &detect.Context{Cache: cache}
 
 	res := &Result{Root: abs}
-	queue := []walkFrame{{dir: abs, depth: 0, parent: nil}}
+	queue := []walkFrame{{dir: abs, depth: 0, parent: nil, control: rootChain}}
 
 	pruneBasenames := map[string]struct{}{}
 	for _, b := range detect.PruneBasenames() {
@@ -133,66 +151,144 @@ func Walk(opts Options) (*Result, error) {
 			continue
 		}
 
-		res.DirsWalked++
-
-		match, err := detect.DetectBest(ctx, frame.dir)
-		if err != nil {
-			return nil, fmt.Errorf("detect %s: %w", frame.dir, err)
+		chain := frame.control
+		if !opts.NoConfig {
+			local, err := config.LoadControl(frame.dir)
+			if err != nil {
+				return nil, err
+			}
+			if local != nil {
+				if frame.control != nil {
+					chain = frame.control.WithLocal(local)
+				} else {
+					chain = (&config.Chain{Global: globalConfig}).WithLocal(local)
+				}
+			}
 		}
 
+		if chain != nil && chain.Ignore() {
+			continue
+		}
+
+		res.DirsWalked++
+
 		var project *detect.Project
-		// Paths (relative) owned by this directory's match — do not orphan-report them.
 		ownedRel := map[string]struct{}{}
-		// First path segments to prune under this directory.
 		localPrune := map[string]struct{}{}
 
-		switch {
-		case match != nil && match.Confidence == detect.ConfidenceStrong:
-			project = &detect.Project{
-				Root:       frame.dir,
-				Framework:  match.Framework,
-				Confidence: match.Confidence,
-				Manifest:   match.Manifest,
-				Metadata:   match.Metadata,
-				Parent:     frame.parent,
-			}
-			res.Projects = append(res.Projects, project)
+		mode := config.ModeMerge
+		if chain != nil {
+			mode = chain.Mode()
+		}
 
-			expanded, err := expandMatchTargets(cache, frame.dir, match.Targets)
-			if err != nil {
+		switch mode {
+		case config.ModeStrict:
+			if _, err := appendExplicitDeletes(res, cache, frame, chain, nil, &ownedRel, &localPrune, pruneBasenames); err != nil {
 				return nil, err
 			}
-			for _, t := range expanded {
-				ownedRel[t.RelPath] = struct{}{}
-				seg := firstPathSeg(t.RelPath)
-				if seg != "" {
-					pruneBasenames[seg] = struct{}{}
-					localPrune[seg] = struct{}{}
+
+		default: // merge
+			var only, disable []string
+			if chain != nil {
+				if eff := chain.Effective(); eff != nil {
+					only, disable = eff.FrameworksOnly, eff.FrameworksDisable
 				}
-				res.Candidates = append(res.Candidates, Candidate{
-					Kind:    KindDeleteCandidate,
-					Project: project,
-					Target:  t,
-				})
+			}
+			match, err := detect.DetectBestFiltered(ctx, frame.dir, only, disable)
+			if err != nil {
+				return nil, fmt.Errorf("detect %s: %w", frame.dir, err)
 			}
 
-		case match != nil && match.Confidence == detect.ConfidenceWeak:
-			expanded, err := expandMatchTargets(cache, frame.dir, match.Targets)
-			if err != nil {
-				return nil, err
-			}
-			for _, t := range expanded {
-				ownedRel[t.RelPath] = struct{}{}
-				seg := firstPathSeg(t.RelPath)
-				if seg != "" {
-					pruneBasenames[seg] = struct{}{}
-					localPrune[seg] = struct{}{}
+			switch {
+			case match != nil && match.Confidence == detect.ConfidenceStrong:
+				project = &detect.Project{
+					Root:       frame.dir,
+					Framework:  match.Framework,
+					Confidence: match.Confidence,
+					Manifest:   match.Manifest,
+					Metadata:   match.Metadata,
+					Parent:     frame.parent,
 				}
-				res.Candidates = append(res.Candidates, Candidate{
-					Kind:   KindWeak,
-					Target: t,
-					Reason: "corrupt or unparseable manifest (weak match)",
-				})
+				res.Projects = append(res.Projects, project)
+
+				expanded, err := expandMatchTargets(cache, frame.dir, match.Targets)
+				if err != nil {
+					return nil, err
+				}
+				for _, t := range expanded {
+					ownedRel[t.RelPath] = struct{}{}
+					seg := firstPathSeg(t.RelPath)
+					if seg != "" {
+						pruneBasenames[seg] = struct{}{}
+						localPrune[seg] = struct{}{}
+					}
+					explicit := false
+					if chain != nil {
+						if _, del := chain.Classify(t.Path, true); del != nil {
+							explicit = true
+							if del.Reason != "" && t.Reason == "" {
+								t.Reason = del.Reason
+							}
+						}
+					}
+					res.Candidates = append(res.Candidates, Candidate{
+						Kind:           KindDeleteCandidate,
+						Project:        project,
+						Target:         t,
+						Control:        chain,
+						ExplicitDelete: explicit,
+					})
+				}
+
+			case match != nil && match.Confidence == detect.ConfidenceWeak:
+				expanded, err := expandMatchTargets(cache, frame.dir, match.Targets)
+				if err != nil {
+					return nil, err
+				}
+				for _, t := range expanded {
+					// Explicit delete: upgrades weak paths to delete candidates.
+					if chain != nil {
+						if _, del := chain.Classify(t.Path, true); del != nil {
+							ownedRel[t.RelPath] = struct{}{}
+							seg := firstPathSeg(t.RelPath)
+							if seg != "" {
+								pruneBasenames[seg] = struct{}{}
+								localPrune[seg] = struct{}{}
+							}
+							ct := t
+							if del.Reason != "" {
+								ct.Reason = del.Reason
+							}
+							if del.Regenerate != "" {
+								ct.Regenerate = del.Regenerate
+							}
+							res.Candidates = append(res.Candidates, Candidate{
+								Kind:           KindDeleteCandidate,
+								Project:        syntheticOrParent(frame, chain),
+								Target:         ct,
+								Control:        chain,
+								ExplicitDelete: true,
+							})
+							continue
+						}
+					}
+					ownedRel[t.RelPath] = struct{}{}
+					seg := firstPathSeg(t.RelPath)
+					if seg != "" {
+						pruneBasenames[seg] = struct{}{}
+						localPrune[seg] = struct{}{}
+					}
+					res.Candidates = append(res.Candidates, Candidate{
+						Kind:    KindWeak,
+						Target:  t,
+						Reason:  "corrupt or unparseable manifest (weak match)",
+						Control: chain,
+					})
+				}
+			}
+
+			if _, err := appendExplicitDeletes(res, cache, frame, chain, project, &ownedRel, &localPrune, pruneBasenames); err != nil {
+				return nil, err
 			}
 		}
 
@@ -205,6 +301,12 @@ func Walk(opts Options) (*Result, error) {
 		if project != nil {
 			nextParent = project
 		}
+		nextControl := (*config.Chain)(nil)
+		if !opts.NoConfig {
+			if chain != nil {
+				nextControl = chain.ForChildren()
+			}
+		}
 
 		for _, e := range entries {
 			name := e.Name()
@@ -214,7 +316,6 @@ func Walk(opts Options) (*Result, error) {
 			child := filepath.Join(frame.dir, name)
 
 			if _, prune := pruneBasenames[name]; prune {
-				// Owned by current match (exact basename or nested under first segment).
 				if _, local := localPrune[name]; local {
 					continue
 				}
@@ -222,9 +323,33 @@ func Walk(opts Options) (*Result, error) {
 					continue
 				}
 				// Orphan: known artifact without a Strong/Weak owner in this directory.
+				// Explicit delete: for this path upgrades to a delete candidate.
 				if project == nil {
 					if e.IsDir() || (e.Type()&fs.ModeSymlink) != 0 {
-						if match == nil || match.Confidence != detect.ConfidenceWeak {
+						if chain != nil {
+							isDir := e.IsDir() || (e.Type()&fs.ModeSymlink) != 0
+							if _, del := chain.Classify(child, isDir); del != nil {
+								rel := name
+								ct := detect.Target{
+									Path:       child,
+									RelPath:    rel,
+									Kind:       detect.KindDir,
+									Reason:     del.Reason,
+									Regenerate: del.Regenerate,
+								}
+								res.Candidates = append(res.Candidates, Candidate{
+									Kind:           KindDeleteCandidate,
+									Project:        syntheticOrParent(frame, chain),
+									Target:         ct,
+									Control:        chain,
+									ExplicitDelete: true,
+								})
+								localPrune[name] = struct{}{}
+								continue
+							}
+						}
+						// In strict mode orphans are irrelevant (detectors off); still skip walking.
+						if mode != config.ModeStrict {
 							res.Candidates = append(res.Candidates, Candidate{
 								Kind: KindOrphan,
 								Target: detect.Target{
@@ -232,7 +357,8 @@ func Walk(opts Options) (*Result, error) {
 									RelPath: name,
 									Kind:    detect.KindDir,
 								},
-								Reason: "orphaned: no validated project in the same directory",
+								Reason:  "orphaned: no validated project in the same directory",
+								Control: chain,
 							})
 						}
 					}
@@ -260,15 +386,104 @@ func Walk(opts Options) (*Result, error) {
 			}
 
 			queue = append(queue, walkFrame{
-				dir:    child,
-				depth:  frame.depth + 1,
-				parent: nextParent,
+				dir:     child,
+				depth:   frame.depth + 1,
+				parent:  nextParent,
+				control: nextControl,
 			})
 		}
 	}
 
 	_ = opts.Concurrency // reserved for parallel detect; walk is sequential for attribution
 	return res, nil
+}
+
+func syntheticOrParent(frame walkFrame, chain *config.Chain) *detect.Project {
+	if frame.parent != nil {
+		return frame.parent
+	}
+	dir := frame.dir
+	if chain != nil {
+		if eff := chain.Effective(); eff != nil {
+			dir = eff.Dir
+		}
+	}
+	return &detect.Project{
+		Root:       dir,
+		Framework:  "custom",
+		Confidence: detect.ConfidenceStrong,
+	}
+}
+
+// appendExplicitDeletes adds delete: matches among direct children of frame.dir
+// that are not already owned. Returns whether any were added.
+func appendExplicitDeletes(
+	res *Result,
+	cache *DirCache,
+	frame walkFrame,
+	chain *config.Chain,
+	project *detect.Project,
+	ownedRel *map[string]struct{},
+	localPrune *map[string]struct{},
+	pruneBasenames map[string]struct{},
+) (bool, error) {
+	if chain == nil {
+		return false, nil
+	}
+	entries, err := cache.ReadDir(frame.dir)
+	if err != nil {
+		return false, nil
+	}
+	added := false
+	for _, e := range entries {
+		name := e.Name()
+		if rules.IsVCSDir(name) {
+			continue
+		}
+		if _, ok := (*ownedRel)[name]; ok {
+			continue
+		}
+		child := filepath.Join(frame.dir, name)
+		info, err := e.Info()
+		if err != nil {
+			continue
+		}
+		isDir := info.IsDir() || isSymlink(info)
+		keep, del := chain.Classify(child, isDir)
+		if keep || del == nil {
+			continue
+		}
+		// Stay inside the scan root.
+		if !IsUnder(child, res.Root) {
+			continue
+		}
+		ct := detect.Target{
+			Path:       child,
+			RelPath:    name,
+			Kind:       detect.KindDir,
+			Reason:     del.Reason,
+			Regenerate: del.Regenerate,
+		}
+		if !isDir {
+			ct.Kind = detect.KindFile
+		}
+		owner := project
+		if owner == nil {
+			owner = syntheticOrParent(frame, chain)
+		}
+		res.Candidates = append(res.Candidates, Candidate{
+			Kind:           KindDeleteCandidate,
+			Project:        owner,
+			Target:         ct,
+			Control:        chain,
+			ExplicitDelete: true,
+		})
+		(*ownedRel)[name] = struct{}{}
+		(*localPrune)[name] = struct{}{}
+		pruneBasenames[name] = struct{}{}
+		added = true
+	}
+	return added, nil
 }
 
 func expandMatchTargets(cache *DirCache, dir string, targets []detect.Target) ([]detect.Target, error) {

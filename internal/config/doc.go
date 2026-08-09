@@ -1,2 +1,2 @@
-// Package config loads reclaim control files and global configuration.
+// Package config loads reclaim control files (.reclaim.yaml) and global configuration.
 package config

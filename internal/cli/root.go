@@ -13,6 +13,7 @@ type sharedFlags struct {
 	concurrency      int
 	dryRun           bool
 	iKnowWhatImDoing bool
+	noConfig         bool
 }
 
 func defaultConcurrency() int {
@@ -54,6 +55,7 @@ func newRootCmd() *cobra.Command {
 	pf.IntVar(&f.concurrency, "concurrency", defaultConcurrency(), "walker parallelism")
 	pf.BoolVarP(&f.dryRun, "dry-run", "n", false, "print the plan and exit without deleting")
 	pf.BoolVar(&f.iKnowWhatImDoing, "i-know-what-im-doing", false, "allow scanning / or $HOME")
+	pf.BoolVar(&f.noConfig, "no-config", false, "ignore all .reclaim.yaml and global config")
 
 	cmd.AddCommand(newScanCmd(f))
 	cmd.AddCommand(newPlanCmd(f))

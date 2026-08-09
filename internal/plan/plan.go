@@ -3,6 +3,7 @@ package plan
 import (
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -47,7 +48,9 @@ type Plan struct {
 	Decisions []Decision
 }
 
-// Build turns walk candidates into decisions using safety and git rules.
+const reasonKeptByControl = "kept by .reclaim.yaml"
+
+// Build turns walk candidates into decisions using safety, control, and git rules.
 func Build(res *scan.Result) *Plan {
 	p := &Plan{Root: res.Root}
 	gitCache := rules.NewGitCache()
@@ -69,50 +72,78 @@ func Build(res *scan.Result) *Plan {
 				Reason:  c.Reason,
 			})
 		case scan.KindDeleteCandidate:
-			if reason := rules.CheckTarget(res.Root, c.Target.Path); reason != "" {
-				p.Decisions = append(p.Decisions, Decision{
-					Project: c.Project,
-					Target:  c.Target,
-					Verdict: VerdictSkipped,
-					Reason:  reason,
-				})
-				continue
-			}
-			if c.Target.Safety == detect.SafetyRequiresFlag {
-				p.Decisions = append(p.Decisions, Decision{
-					Project: c.Project,
-					Target:  c.Target,
-					Verdict: VerdictSkipped,
-					Reason:  "requires --aggressive",
-				})
-				continue
-			}
-
-			attachGitRepo(c.Project, gitCache)
-			var gitRepo *rules.GitRepo
-			if c.Project != nil {
-				gitRepo = gitCache.RepoFor(c.Project.Root)
-			}
-			if reason := rules.CheckGit(gitRepo, c.Target.Path); reason != "" {
-				p.Decisions = append(p.Decisions, Decision{
-					Project: c.Project,
-					Target:  c.Target,
-					Verdict: VerdictSkipped,
-					Reason:  reason,
-				})
-				continue
-			}
-
-			p.Decisions = append(p.Decisions, Decision{
-				Project: c.Project,
-				Target:  c.Target,
-				Verdict: VerdictDelete,
-				Reason:  c.Target.Reason,
-			})
+			p.Decisions = append(p.Decisions, evaluateDeleteCandidate(res.Root, c, gitCache))
 		}
 	}
 
 	return p
+}
+
+func evaluateDeleteCandidate(root string, c scan.Candidate, gitCache *rules.GitCache) Decision {
+	base := Decision{Project: c.Project, Target: c.Target}
+
+	if reason := rules.CheckTarget(root, c.Target.Path); reason != "" {
+		base.Verdict = VerdictSkipped
+		base.Reason = reason
+		return base
+	}
+
+	isDir := true
+	if st, err := os.Lstat(c.Target.Path); err == nil {
+		isDir = st.IsDir() || st.Mode()&os.ModeSymlink != 0
+	}
+
+	if c.Control != nil {
+		keep, del := c.Control.Classify(c.Target.Path, isDir)
+		if keep {
+			base.Verdict = VerdictKept
+			base.Reason = reasonKeptByControl
+			return base
+		}
+		if del != nil {
+			c.ExplicitDelete = true
+			if del.Reason != "" {
+				base.Target.Reason = del.Reason
+			}
+			if del.Regenerate != "" {
+				base.Target.Regenerate = del.Regenerate
+			}
+		}
+	}
+
+	if c.Target.Safety == detect.SafetyRequiresFlag && !c.ExplicitDelete {
+		base.Verdict = VerdictSkipped
+		base.Reason = "requires --aggressive"
+		return base
+	}
+
+	bypassGit := c.ExplicitDelete
+	if c.Control != nil && !c.Control.RequireGitIgnored() {
+		bypassGit = true
+	}
+
+	if !bypassGit {
+		attachGitRepo(c.Project, gitCache)
+		var gitRepo *rules.GitRepo
+		if c.Project != nil {
+			gitRepo = gitCache.RepoFor(c.Project.Root)
+		}
+		if reason := rules.CheckGit(gitRepo, c.Target.Path); reason != "" {
+			base.Verdict = VerdictSkipped
+			base.Reason = reason
+			return base
+		}
+	} else {
+		attachGitRepo(c.Project, gitCache)
+	}
+
+	base.Verdict = VerdictDelete
+	if base.Target.Reason != "" {
+		base.Reason = base.Target.Reason
+	} else {
+		base.Reason = c.Target.Reason
+	}
+	return base
 }
 
 func attachGitRepo(project *detect.Project, cache *rules.GitCache) {
@@ -128,13 +159,15 @@ func attachGitRepo(project *detect.Project, cache *rules.GitCache) {
 
 // WriteHuman prints a plan listing to w.
 func WriteHuman(w io.Writer, p *Plan) error {
-	var deletes, skips []Decision
+	var deletes, skips, kept []Decision
 	for _, d := range p.Decisions {
 		switch d.Verdict {
 		case VerdictDelete:
 			deletes = append(deletes, d)
 		case VerdictSkipped:
 			skips = append(skips, d)
+		case VerdictKept:
+			kept = append(kept, d)
 		}
 	}
 
@@ -142,7 +175,7 @@ func WriteHuman(w io.Writer, p *Plan) error {
 		return err
 	}
 
-	if len(deletes) == 0 && len(skips) == 0 {
+	if len(deletes) == 0 && len(skips) == 0 && len(kept) == 0 {
 		if _, err := fmt.Fprintln(w, "No reclaimable targets found."); err != nil {
 			return err
 		}
@@ -179,6 +212,20 @@ func WriteHuman(w io.Writer, p *Plan) error {
 		}
 	}
 
+	if len(kept) > 0 {
+		if _, err := fmt.Fprintf(w, "Kept (%d)\n", len(kept)); err != nil {
+			return err
+		}
+		for _, d := range kept {
+			if _, err := fmt.Fprintf(w, "  %s    %s\n", d.Target.Path, d.Reason); err != nil {
+				return err
+			}
+		}
+		if _, err := fmt.Fprintln(w); err != nil {
+			return err
+		}
+	}
+
 	if len(skips) > 0 {
 		if _, err := fmt.Fprintf(w, "Skipped (%d)\n", len(skips)); err != nil {
 			return err
@@ -200,7 +247,11 @@ func WriteHuman(w io.Writer, p *Plan) error {
 		}
 	}
 
-	if _, err := fmt.Fprintf(w, "%d delete · %d skipped\n", len(deletes), len(skips)); err != nil {
+	if len(kept) > 0 {
+		if _, err := fmt.Fprintf(w, "%d delete · %d kept · %d skipped\n", len(deletes), len(kept), len(skips)); err != nil {
+			return err
+		}
+	} else if _, err := fmt.Fprintf(w, "%d delete · %d skipped\n", len(deletes), len(skips)); err != nil {
 		return err
 	}
 	return nil

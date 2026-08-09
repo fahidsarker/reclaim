@@ -32,6 +32,7 @@ func runPlanDry(cmd *cobra.Command, args []string, f *sharedFlags) error {
 		MaxDepth:         f.depth,
 		Concurrency:      f.concurrency,
 		IKnowWhatImDoing: f.iKnowWhatImDoing,
+		NoConfig:         f.noConfig,
 	})
 	if err != nil {
 		return err
