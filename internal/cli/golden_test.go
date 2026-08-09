@@ -86,5 +86,9 @@ func normalizeGolden(s, root string) string {
 	// Duration lines vary slightly; normalize timing.
 	reDur := regexp.MustCompile(`\d+(\.\d+)?(ms|s|µs|us|m)`)
 	s = reDur.ReplaceAllString(s, "TIME")
+	// Project headers use %-56s on absolute temp paths; after /FIXTURE rewrite,
+	// residual padding depends on TempDir length. Collapse to a stable gap.
+	reHeader := regexp.MustCompile(`(?m)^(/FIXTURE/\S+)\s{2,}(.+)$`)
+	s = reHeader.ReplaceAllString(s, "$1  $2")
 	return s
 }

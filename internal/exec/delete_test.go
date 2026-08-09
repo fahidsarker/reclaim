@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -131,6 +132,11 @@ func TestRun_RevalidationIdentityChanged(t *testing.T) {
 	mustMkdir(t, first)
 	mustMkdir(t, second)
 
+	oldID, err := identityFromPath(second)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	p := &plan.Plan{
 		Root: root,
 		Decisions: []plan.Decision{
@@ -145,10 +151,30 @@ func TestRun_RevalidationIdentityChanged(t *testing.T) {
 		ToTrash: true,
 		Trash: func(path string, warn io.Writer) error {
 			if path == first {
-				if err := os.RemoveAll(second); err != nil {
-					return err
+				// Linux/ext4 often recycles the freed inode on immediate recreate.
+				// Burn sink inodes until a_second gets a different identity.
+				changed := false
+				for i := 0; i < 32; i++ {
+					if err := os.RemoveAll(second); err != nil {
+						return err
+					}
+					sink := filepath.Join(root, fmt.Sprintf(".inode_sink_%d", i))
+					if err := os.Mkdir(sink, 0o755); err != nil {
+						return err
+					}
+					mustMkdir(t, second)
+					id, err := identityFromPath(second)
+					if err != nil {
+						return err
+					}
+					if id != oldID {
+						changed = true
+						break
+					}
 				}
-				mustMkdir(t, second)
+				if !changed {
+					return fmt.Errorf("could not recreate %s with a new identity", second)
+				}
 			}
 			return permanentlyRemove(path)
 		},
