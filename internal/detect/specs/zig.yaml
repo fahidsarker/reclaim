@@ -1,0 +1,17 @@
+name: zig
+description: Zig projects
+priority: 10
+
+detect:
+  file_exists: build.zig
+
+targets:
+  - path: zig-out
+    reason: Zig build output
+    regenerate: zig build
+  - path: zig-cache
+    reason: Zig cache
+    regenerate: zig build
+  - path: .zig-cache
+    reason: Zig cache
+    regenerate: zig build

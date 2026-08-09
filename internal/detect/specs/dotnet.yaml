@@ -1,0 +1,21 @@
+name: dotnet
+description: .NET projects
+priority: 10
+
+detect:
+  any:
+    - glob_exists: "*.csproj"
+    - glob_exists: "*.fsproj"
+    - glob_exists: "*.vbproj"
+    - glob_exists: "*.sln"
+
+targets:
+  - path: bin
+    reason: .NET build output
+    regenerate: dotnet build
+  - path: obj
+    reason: .NET intermediate output
+    regenerate: dotnet build
+  - path: packages
+    reason: Local NuGet packages
+    regenerate: dotnet restore

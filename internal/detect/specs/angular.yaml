@@ -1,0 +1,15 @@
+name: angular
+description: Angular projects
+priority: 20
+extends: nodejs
+
+detect:
+  file_exists: angular.json
+
+targets:
+  - path: .angular/cache
+    reason: Angular cache
+    regenerate: ng build
+  - path: dist
+    reason: Angular build output
+    regenerate: ng build

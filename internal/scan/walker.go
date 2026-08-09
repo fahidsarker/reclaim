@@ -395,6 +395,10 @@ func Walk(opts Options) (*Result, error) {
 	}
 
 	_ = opts.Concurrency // reserved for parallel detect; walk is sequential for attribution
+
+	if err := detect.RunPostProcessors(res.Projects); err != nil {
+		return nil, err
+	}
 	return res, nil
 }
 

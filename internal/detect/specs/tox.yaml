@@ -1,0 +1,11 @@
+name: tox
+description: Tox test environments
+priority: 15
+
+detect:
+  file_exists: tox.ini
+
+targets:
+  - path: .tox
+    reason: Tox virtualenvs
+    regenerate: tox

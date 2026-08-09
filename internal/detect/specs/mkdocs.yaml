@@ -1,0 +1,11 @@
+name: mkdocs
+description: MkDocs sites
+priority: 10
+
+detect:
+  file_exists: mkdocs.yml
+
+targets:
+  - path: site
+    reason: MkDocs build output
+    regenerate: mkdocs build

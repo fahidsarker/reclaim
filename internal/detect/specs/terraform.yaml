@@ -1,0 +1,12 @@
+name: terraform
+description: Terraform projects
+priority: 10
+
+detect:
+  glob_exists: "*.tf"
+
+targets:
+  - path: .terraform
+    reason: Terraform provider plugins
+    regenerate: terraform init
+    safety: requires_flag

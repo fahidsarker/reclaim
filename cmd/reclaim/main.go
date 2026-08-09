@@ -7,6 +7,7 @@ import (
 
 	"github.com/fahid/reclaim/internal/cli"
 	"github.com/fahid/reclaim/internal/detect"
+	_ "github.com/fahid/reclaim/internal/detect/builtin"
 )
 
 func main() {

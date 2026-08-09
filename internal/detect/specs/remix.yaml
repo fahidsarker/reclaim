@@ -1,0 +1,20 @@
+name: remix
+description: Remix applications
+priority: 20
+extends: nodejs
+
+detect:
+  any:
+    - file_exists: remix.config.js
+    - file_exists: remix.config.ts
+    - file_contains:
+        file: package.json
+        pattern: '"@remix-run/'
+
+targets:
+  - path: build
+    reason: Remix build output
+    regenerate: remix build
+  - path: .cache
+    reason: Remix cache
+    regenerate: remix build

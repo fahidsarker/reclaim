@@ -1,0 +1,27 @@
+name: android
+description: Android Gradle projects
+priority: 25
+
+detect:
+  all:
+    - any:
+        - file_exists: build.gradle
+        - file_exists: build.gradle.kts
+    - glob_exists: "**/AndroidManifest.xml"
+
+targets:
+  - path: build
+    reason: Android build output
+    regenerate: ./gradlew assemble
+  - path: .gradle
+    reason: Gradle project cache
+    regenerate: ./gradlew assemble
+  - path: .cxx
+    reason: Android NDK build cache
+    regenerate: ./gradlew assemble
+  - path: app/build
+    reason: Android app build output
+    regenerate: ./gradlew assemble
+  - path: captures
+    reason: Android Studio captures
+    regenerate: ""

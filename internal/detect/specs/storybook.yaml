@@ -1,0 +1,12 @@
+name: storybook
+description: Storybook projects
+priority: 20
+extends: nodejs
+
+detect:
+  dir_exists: .storybook
+
+targets:
+  - path: storybook-static
+    reason: Storybook static build
+    regenerate: storybook build

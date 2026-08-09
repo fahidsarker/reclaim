@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/fahid/reclaim/internal/detect"
+	_ "github.com/fahid/reclaim/internal/detect/builtin"
 	"github.com/fahid/reclaim/internal/plan"
 	"github.com/fahid/reclaim/internal/scan"
 )
@@ -30,7 +31,7 @@ func TestWalk_PositiveNodeProject(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	p := plan.Build(res)
+	p := plan.Build(res, plan.Options{})
 
 	var deletes int
 	for _, d := range p.Decisions {
@@ -60,7 +61,7 @@ func TestWalk_OrphanNodeModules(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	p := plan.Build(res)
+	p := plan.Build(res, plan.Options{})
 
 	if len(p.Decisions) == 0 {
 		t.Fatal("expected orphan to appear as skipped")
@@ -89,7 +90,7 @@ func TestWalk_CorruptPackageJSON(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	p := plan.Build(res)
+	p := plan.Build(res, plan.Options{})
 
 	found := false
 	for _, d := range p.Decisions {
@@ -119,7 +120,7 @@ func TestWalk_NeverEntersGit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	p := plan.Build(res)
+	p := plan.Build(res, plan.Options{})
 	for _, d := range p.Decisions {
 		if d.Verdict == plan.VerdictDelete {
 			t.Fatalf("must not target inside .git: %+v", d)
@@ -145,7 +146,7 @@ func TestWalk_NestedProjects(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	p := plan.Build(res)
+	p := plan.Build(res, plan.Options{})
 
 	var deletes int
 	for _, d := range p.Decisions {
@@ -176,7 +177,7 @@ func TestWalk_SymlinkEscapeSkipped(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	p := plan.Build(res)
+	p := plan.Build(res, plan.Options{})
 
 	for _, d := range p.Decisions {
 		if d.Verdict == plan.VerdictDelete {

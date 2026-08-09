@@ -1,0 +1,16 @@
+name: haskell
+description: Haskell Cabal/Stack projects
+priority: 10
+
+detect:
+  any:
+    - glob_exists: "*.cabal"
+    - file_exists: stack.yaml
+
+targets:
+  - path: dist-newstyle
+    reason: Cabal build output
+    regenerate: cabal build
+  - path: .stack-work
+    reason: Stack work directory
+    regenerate: stack build

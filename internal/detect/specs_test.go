@@ -1,6 +1,7 @@
 package detect_test
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"sort"
@@ -34,101 +35,92 @@ func detectDir(t *testing.T, dir string) *detect.Match {
 }
 
 func TestSpecs_Table(t *testing.T) {
+	pythonRels := []string{
+		"*.egg-info",
+		"**/__pycache__",
+		".ipynb_checkpoints",
+		".mypy_cache",
+		".pytest_cache",
+		".ruff_cache",
+		"build",
+		"dist",
+	}
 	cases := []struct {
 		name           string
 		setup          func(dir string) error
 		decoyArtifacts []string
 		wantFramework  string
-		wantRels       []string // strong match target RelPaths (pre-existence filter)
+		wantRels       []string
 	}{
-		{
-			name:          "nodejs",
-			setup:         fixtures.NodeJS,
-			decoyArtifacts: []string{"node_modules"},
-			wantFramework: "nodejs",
-			wantRels:      []string{"node_modules"},
-		},
-		{
-			name:          "nextjs",
-			setup:         fixtures.NextJS,
-			decoyArtifacts: []string{".next", "node_modules"},
-			wantFramework: "nextjs",
-			wantRels:      []string{".next", "node_modules"},
-		},
-		{
-			name:          "vite",
-			setup:         fixtures.Vite,
-			decoyArtifacts: []string{"dist", "node_modules"},
-			wantFramework: "vite", // DetectBest label; nodejs may also match and union
-			wantRels:      []string{"dist", "node_modules", "node_modules/.vite"},
-		},
-		{
-			name:          "turborepo",
-			setup:         fixtures.Turborepo,
-			decoyArtifacts: []string{".turbo"},
-			wantFramework: "turborepo",
-			wantRels:      []string{".turbo", "node_modules"},
-		},
-		{
-			name:          "python",
-			setup:         fixtures.Python,
-			decoyArtifacts: []string{"build", "dist", ".pytest_cache"},
-			wantFramework: "python",
-			wantRels: []string{
-				"*.egg-info",
-				"**/__pycache__",
-				".ipynb_checkpoints",
-				".mypy_cache",
-				".pytest_cache",
-				".ruff_cache",
-				"build",
-				"dist",
-			},
-		},
-		{
-			name:          "rust",
-			setup:         fixtures.Rust,
-			decoyArtifacts: []string{"target"},
-			wantFramework: "rust",
-			wantRels:      []string{"target"},
-		},
-		{
-			name:          "go",
-			setup:         fixtures.Go,
-			decoyArtifacts: []string{"vendor", "bin", "dist"},
-			wantFramework: "go",
-			wantRels:      []string{"bin", "dist", "vendor"},
-		},
-		{
-			name:          "maven",
-			setup:         fixtures.Maven,
-			decoyArtifacts: []string{"target"},
-			wantFramework: "maven",
-			wantRels:      []string{"target"},
-		},
-		{
-			name:          "gradle",
-			setup:         fixtures.Gradle,
-			decoyArtifacts: []string{"build", ".gradle"},
-			wantFramework: "gradle",
-			wantRels:      []string{".gradle", "build"},
-		},
-		{
-			name:          "flutter",
-			setup:         fixtures.Flutter,
-			decoyArtifacts: []string{"build", ".dart_tool"},
-			wantFramework: "flutter",
-			wantRels: []string{
-				".dart_tool",
-				".flutter-plugins",
-				".flutter-plugins-dependencies",
-				"android/.gradle",
-				"build",
-				"ios/.symlinks",
-				"ios/Pods",
-				"macos/Pods",
-			},
-		},
+		{"nodejs", fixtures.NodeJS, []string{"node_modules"}, "nodejs", []string{"node_modules"}},
+		{"nextjs", fixtures.NextJS, []string{".next", "node_modules"}, "nextjs", []string{".next", "node_modules"}},
+		{"vite", fixtures.Vite, []string{"dist", "node_modules"}, "vite", []string{"dist", "node_modules", "node_modules/.vite"}},
+		{"turborepo", fixtures.Turborepo, []string{".turbo"}, "turborepo", []string{".turbo", "node_modules"}},
+		{"python", fixtures.Python, []string{"build", "dist", ".pytest_cache"}, "python", pythonRels},
+		{"rust", fixtures.Rust, []string{"target"}, "rust", []string{"target"}},
+		{"go", fixtures.Go, []string{"vendor", "bin", "dist"}, "go", []string{"bin", "dist", "vendor"}},
+		{"maven", fixtures.Maven, []string{"target"}, "maven", []string{"target"}},
+		{"gradle", fixtures.Gradle, []string{"build", ".gradle"}, "gradle", []string{".gradle", "build"}},
+		{"flutter", fixtures.Flutter, []string{"build", ".dart_tool"}, "flutter", []string{
+			".dart_tool", ".flutter-plugins", ".flutter-plugins-dependencies",
+			"android/.gradle", "build", "ios/.symlinks", "ios/Pods", "macos/Pods",
+		}},
+		{"nuxt", fixtures.Nuxt, []string{".nuxt"}, "nuxt", []string{".nuxt", ".output", "node_modules"}},
+		{"sveltekit", fixtures.SvelteKit, []string{".svelte-kit"}, "sveltekit", []string{".svelte-kit", "node_modules"}},
+		{"astro", fixtures.Astro, []string{".astro", "dist"}, "astro", []string{".astro", "dist", "node_modules"}},
+		{"angular", fixtures.Angular, []string{".angular/cache", "dist"}, "angular", []string{".angular/cache", "dist", "node_modules"}},
+		{"gatsby", fixtures.Gatsby, []string{".cache", "public"}, "gatsby", []string{".cache", "node_modules", "public"}},
+		{"remix", fixtures.Remix, []string{"build", ".cache"}, "remix", []string{".cache", "build", "node_modules"}},
+		{"nx", fixtures.Nx, []string{".nx/cache", "dist"}, "nx", []string{".nx/cache", "dist", "node_modules"}},
+		{"parcel", fixtures.Parcel, []string{".parcel-cache", "dist"}, "parcel", []string{".parcel-cache", "dist", "node_modules"}},
+		{"electron", fixtures.Electron, []string{"dist", "out"}, "electron", []string{"dist", "node_modules", "out", "release"}},
+		{"expo", fixtures.Expo, []string{".expo"}, "expo", []string{".expo", ".expo-shared", "node_modules"}},
+		{"react-native", fixtures.ReactNative, []string{"ios/Pods"}, "react-native", []string{
+			"android/.gradle", "android/build", "ios/Pods", "ios/build", "node_modules",
+		}},
+		{"storybook", fixtures.Storybook, []string{"storybook-static"}, "storybook", []string{"node_modules", "storybook-static"}},
+		{"jest", fixtures.Jest, []string{"coverage"}, "jest", []string{"coverage", "node_modules"}},
+		{"python-venv", fixtures.PythonVenv, []string{".venv"}, "python-venv", []string{".venv", "env", "venv"}},
+		{"tox", fixtures.Tox, []string{".tox"}, "tox", []string{".tox"}},
+		{"poetry", fixtures.Poetry, []string{"dist"}, "poetry", pythonRels},
+		{"uv", fixtures.UV, []string{"dist"}, "uv", nil},
+		{"android", fixtures.Android, []string{"app/build"}, "android", []string{".cxx", ".gradle", "app/build", "build", "captures"}},
+		{"sbt", fixtures.SBT, []string{"target"}, "sbt", []string{"project/target", "target"}},
+		{"dart", fixtures.Dart, []string{"build", ".dart_tool"}, "dart", []string{".dart_tool", "build"}},
+		{"swiftpm", fixtures.SwiftPM, []string{".build"}, "swiftpm", []string{".build", ".swiftpm"}},
+		{"cocoapods", fixtures.CocoaPods, []string{"Pods"}, "cocoapods", []string{"Pods"}},
+		{"carthage", fixtures.Carthage, []string{"Carthage/Build"}, "carthage", []string{"Carthage/Build"}},
+		{"xcode", fixtures.Xcode, []string{"build", "DerivedData"}, "xcode", []string{"DerivedData", "build"}},
+		{"dotnet", fixtures.Dotnet, []string{"bin", "obj"}, "dotnet", []string{"bin", "obj", "packages"}},
+		{"bundler", fixtures.Bundler, []string{"vendor/bundle"}, "bundler", []string{".bundle", "tmp/cache", "vendor/bundle"}},
+		{"rails", fixtures.Rails, []string{"tmp/cache", "log"}, "rails", []string{
+			".bundle", "log", "public/assets", "public/packs", "tmp/cache", "vendor/bundle",
+		}},
+		{"composer", fixtures.Composer, []string{"vendor"}, "composer", []string{"vendor"}},
+		{"laravel", fixtures.Laravel, []string{"bootstrap/cache"}, "laravel", []string{
+			"bootstrap/cache", "storage/framework/cache", "storage/framework/sessions", "storage/framework/views",
+		}},
+		{"symfony", fixtures.Symfony, []string{"var/cache"}, "symfony", []string{"var/cache", "var/log"}},
+		{"cmake", fixtures.CMake, []string{"build"}, "cmake", []string{"CMakeFiles", "_build", "build", "cmake-build-*"}},
+		{"meson", fixtures.Meson, []string{"build", "builddir"}, "meson", []string{"build", "builddir"}},
+		{"bazel", fixtures.Bazel, []string{"bazel-bin"}, "bazel", []string{"bazel-bin", "bazel-out"}},
+		{"zig", fixtures.Zig, []string{"zig-out"}, "zig", []string{".zig-cache", "zig-cache", "zig-out"}},
+		{"elixir", fixtures.Elixir, []string{"_build", "deps"}, "elixir", []string{"_build", "deps"}},
+		{"haskell", fixtures.Haskell, []string{"dist-newstyle"}, "haskell", []string{".stack-work", "dist-newstyle"}},
+		{"nim", fixtures.Nim, []string{"nimcache"}, "nim", []string{"nimcache"}},
+		{"hugo", fixtures.Hugo, []string{"public"}, "hugo", []string{".hugo_build.lock", "public", "resources/_gen"}},
+		{"jekyll", fixtures.Jekyll, []string{"_site"}, "jekyll", []string{
+			".bundle", ".jekyll-cache", ".sass-cache", "_site", "tmp/cache", "vendor/bundle",
+		}},
+		{"zola", fixtures.Zola, []string{"public"}, "zola", []string{"public"}},
+		{"eleventy", fixtures.Eleventy, []string{"_site"}, "eleventy", []string{"_site", "node_modules"}},
+		{"mkdocs", fixtures.MkDocs, []string{"site"}, "mkdocs", []string{"site"}},
+		{"unity", fixtures.Unity, []string{"Library"}, "unity", []string{"Build", "Library", "Logs", "Obj", "Temp", "UserSettings"}},
+		{"godot", fixtures.Godot, []string{".godot"}, "godot", []string{".godot", ".import"}},
+		{"unreal", fixtures.Unreal, []string{"Binaries", "Saved"}, "unreal", []string{"Binaries", "DerivedDataCache", "Intermediate", "Saved"}},
+		{"terraform", fixtures.Terraform, []string{".terraform"}, "terraform", []string{".terraform"}},
+		{"pulumi", fixtures.Pulumi, []string{".pulumi"}, "pulumi", []string{".pulumi"}},
+		{"latex", fixtures.Latex, []string{"main.aux"}, "latex", []string{"*.aux", "*.log", "*.out", "*.toc", "_minted-*"}},
 	}
 
 	for _, tc := range cases {
@@ -199,23 +191,23 @@ func TestLoadSpecs_Malformed(t *testing.T) {
 
 func TestLoadEmbeddedSpecs(t *testing.T) {
 	specs := detect.EmbeddedSpecs()
-	if len(specs) != 10 {
-		t.Fatalf("want 10 embedded specs, got %d", len(specs))
+	if len(specs) != 56 {
+		t.Fatalf("want 56 embedded specs, got %d", len(specs))
 	}
 }
 
 func TestMixedFixtures_Plan(t *testing.T) {
 	root := t.TempDir()
 	projects := map[string]func(string) error{
-		"node-app":   fixtures.NodeJS,
-		"next-app":   fixtures.NextJS,
-		"vite-app":   fixtures.Vite,
-		"turbo-app":  fixtures.Turborepo,
-		"py-app":     fixtures.Python,
-		"rust-app":   fixtures.Rust,
-		"go-app":     fixtures.Go,
-		"maven-app":  fixtures.Maven,
-		"gradle-app": fixtures.Gradle,
+		"node-app":    fixtures.NodeJS,
+		"next-app":    fixtures.NextJS,
+		"vite-app":    fixtures.Vite,
+		"turbo-app":   fixtures.Turborepo,
+		"py-app":      fixtures.Python,
+		"rust-app":    fixtures.Rust,
+		"go-app":      fixtures.Go,
+		"maven-app":   fixtures.Maven,
+		"gradle-app":  fixtures.Gradle,
 		"flutter-app": fixtures.Flutter,
 	}
 	for name, setup := range projects {
@@ -232,7 +224,7 @@ func TestMixedFixtures_Plan(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	p := plan.Build(res)
+	p := plan.Build(res, plan.Options{})
 
 	frameworks := map[string]bool{}
 	var deletes, skips int
@@ -251,6 +243,7 @@ func TestMixedFixtures_Plan(t *testing.T) {
 			}
 		}
 	}
+	_ = skips
 
 	for _, want := range []string{"nodejs", "nextjs", "vite", "turborepo", "python", "rust", "go", "maven", "gradle", "flutter"} {
 		if !frameworks[want] {
@@ -264,7 +257,6 @@ func TestMixedFixtures_Plan(t *testing.T) {
 		t.Fatal("expected SafetyRequiresFlag targets skipped with requires --aggressive")
 	}
 
-	// next-app should contribute node_modules + .next as deletes
 	var nextDeletes []string
 	for _, d := range p.Decisions {
 		if d.Verdict != plan.VerdictDelete || d.Project == nil {
@@ -278,6 +270,140 @@ func TestMixedFixtures_Plan(t *testing.T) {
 	sort.Strings(nextDeletes)
 	if !containsAll(nextDeletes, "node_modules", ".next") {
 		t.Fatalf("next-app deletes = %v, want node_modules and .next", nextDeletes)
+	}
+}
+
+func TestAggressive_IncludesRequiresFlag(t *testing.T) {
+	root := t.TempDir()
+	if err := fixtures.Go(root); err != nil {
+		t.Fatal(err)
+	}
+	// Go fixture gitignores bin/dist but not vendor — mark vendor ignored for delete path.
+	if err := fixtures.WriteFile(filepath.Join(root, ".gitignore"), "bin/\ndist/\nvendor/\n"); err != nil {
+		t.Fatal(err)
+	}
+	if err := fixtures.GitInit(root, ".gitignore", "go.mod"); err != nil {
+		t.Fatal(err)
+	}
+
+	res, err := scan.Walk(scan.Options{Root: root, MaxDepth: 8})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	plain := plan.Build(res, plan.Options{})
+	var vendorSkipped bool
+	for _, d := range plain.Decisions {
+		if filepath.Base(d.Target.Path) == "vendor" && d.Reason == "requires --aggressive" {
+			vendorSkipped = true
+		}
+	}
+	if !vendorSkipped {
+		t.Fatal("expected vendor skipped without --aggressive")
+	}
+
+	agg := plan.Build(res, plan.Options{Aggressive: true})
+	var vendorDelete bool
+	for _, d := range agg.Decisions {
+		if filepath.Base(d.Target.Path) == "vendor" && d.Verdict == plan.VerdictDelete {
+			vendorDelete = true
+		}
+	}
+	if !vendorDelete {
+		t.Fatal("expected vendor delete with --aggressive")
+	}
+}
+
+func TestRustWorkspace_MemberTargetSkipped(t *testing.T) {
+	root := t.TempDir()
+	if err := fixtures.RustWorkspace(root); err != nil {
+		t.Fatal(err)
+	}
+	if err := fixtures.GitInit(root, ".gitignore", "Cargo.toml", "crates/svc/Cargo.toml"); err != nil {
+		t.Fatal(err)
+	}
+
+	res, err := scan.Walk(scan.Options{Root: root, MaxDepth: 8})
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := plan.Build(res, plan.Options{})
+
+	var rootTarget, memberTarget bool
+	for _, d := range p.Decisions {
+		if d.Verdict != plan.VerdictDelete {
+			continue
+		}
+		if d.Project == nil || filepath.ToSlash(d.Target.RelPath) != "target" {
+			continue
+		}
+		rel, _ := filepath.Rel(root, d.Project.Root)
+		switch filepath.ToSlash(rel) {
+		case ".":
+			rootTarget = true
+		case "crates/svc":
+			memberTarget = true
+		}
+	}
+	if !rootTarget {
+		t.Fatal("expected workspace root target as delete candidate")
+	}
+	if memberTarget {
+		t.Fatal("member crate target should be skipped in favour of workspace root")
+	}
+
+	// Member should still be detected as a rust project (strong) without target.
+	member := filepath.Join(root, "crates", "svc")
+	m := detectDir(t, member)
+	if m == nil || m.Framework != "rust" || m.Confidence != detect.ConfidenceStrong {
+		t.Fatalf("want strong rust member, got %+v", m)
+	}
+	if len(m.Targets) != 0 {
+		t.Fatalf("member should omit target, got %v", relPaths(m.Targets))
+	}
+}
+
+func TestLoadUserSpecs_WarnAndSkip(t *testing.T) {
+	dir := t.TempDir()
+	valid := `
+name: custom-tool
+description: user spec
+priority: 50
+detect:
+  file_exists: custom.manifest
+targets:
+  - path: .custom-cache
+    reason: custom cache
+    regenerate: custom rebuild
+`
+	if err := os.WriteFile(filepath.Join(dir, "custom.yaml"), []byte(valid), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "bad.yaml"), []byte("name: broken\ndetect:\n  nope: 1\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var warnings bytes.Buffer
+	n := detect.LoadUserSpecsFromDir(dir, func(msg string) {
+		warnings.WriteString(msg + "\n")
+	})
+	if n != 1 {
+		t.Fatalf("registered %d, want 1", n)
+	}
+	if !strings.Contains(warnings.String(), "bad.yaml") {
+		t.Fatalf("expected warning about bad.yaml, got %q", warnings.String())
+	}
+
+	proj := t.TempDir()
+	if err := fixtures.WriteFile(filepath.Join(proj, "custom.manifest"), "ok"); err != nil {
+		t.Fatal(err)
+	}
+	if err := fixtures.Mkdir(filepath.Join(proj, ".custom-cache")); err != nil {
+		t.Fatal(err)
+	}
+	m := detectDir(t, proj)
+	if m == nil || m.Framework != "custom-tool" {
+		t.Fatalf("want custom-tool, got %+v", m)
 	}
 }
 

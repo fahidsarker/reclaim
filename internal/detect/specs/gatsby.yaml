@@ -1,0 +1,21 @@
+name: gatsby
+description: Gatsby sites
+priority: 20
+extends: nodejs
+
+detect:
+  any:
+    - file_exists: gatsby-config.js
+    - file_exists: gatsby-config.ts
+    - file_exists: gatsby-config.mjs
+    - json_path:
+        file: package.json
+        path: dependencies.gatsby
+
+targets:
+  - path: .cache
+    reason: Gatsby cache
+    regenerate: gatsby build
+  - path: public
+    reason: Gatsby build output
+    regenerate: gatsby build

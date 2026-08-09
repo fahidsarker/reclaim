@@ -1,0 +1,13 @@
+name: zola
+description: Zola sites
+priority: 10
+
+detect:
+  all:
+    - file_exists: config.toml
+    - dir_exists: content
+
+targets:
+  - path: public
+    reason: Zola publish directory
+    regenerate: zola build

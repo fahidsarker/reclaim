@@ -49,8 +49,13 @@ type Plan struct {
 
 const reasonKeptByControl = "kept by .reclaim.yaml"
 
+// Options controls plan evaluation.
+type Options struct {
+	Aggressive bool // include SafetyRequiresFlag targets
+}
+
 // Build turns walk candidates into decisions using safety, control, and git rules.
-func Build(res *scan.Result) *Plan {
+func Build(res *scan.Result, opts Options) *Plan {
 	p := &Plan{Root: res.Root}
 	gitCache := rules.NewGitCache()
 
@@ -71,14 +76,14 @@ func Build(res *scan.Result) *Plan {
 				Reason:  c.Reason,
 			})
 		case scan.KindDeleteCandidate:
-			p.Decisions = append(p.Decisions, evaluateDeleteCandidate(res.Root, c, gitCache))
+			p.Decisions = append(p.Decisions, evaluateDeleteCandidate(res.Root, c, gitCache, opts))
 		}
 	}
 
 	return p
 }
 
-func evaluateDeleteCandidate(root string, c scan.Candidate, gitCache *rules.GitCache) Decision {
+func evaluateDeleteCandidate(root string, c scan.Candidate, gitCache *rules.GitCache, opts Options) Decision {
 	base := Decision{Project: c.Project, Target: c.Target}
 
 	if reason := rules.CheckTarget(root, c.Target.Path); reason != "" {
@@ -110,7 +115,7 @@ func evaluateDeleteCandidate(root string, c scan.Candidate, gitCache *rules.GitC
 		}
 	}
 
-	if c.Target.Safety == detect.SafetyRequiresFlag && !c.ExplicitDelete {
+	if c.Target.Safety == detect.SafetyRequiresFlag && !c.ExplicitDelete && !opts.Aggressive {
 		base.Verdict = VerdictSkipped
 		base.Reason = "requires --aggressive"
 		return base

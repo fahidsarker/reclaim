@@ -1,0 +1,14 @@
+name: swiftpm
+description: Swift Package Manager projects
+priority: 10
+
+detect:
+  file_exists: Package.swift
+
+targets:
+  - path: .build
+    reason: SwiftPM build output
+    regenerate: swift build
+  - path: .swiftpm
+    reason: SwiftPM workspace data
+    regenerate: swift build

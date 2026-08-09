@@ -1,0 +1,19 @@
+name: expo
+description: Expo applications
+priority: 20
+extends: nodejs
+
+detect:
+  all:
+    - file_exists: app.json
+    - json_path:
+        file: app.json
+        path: expo
+
+targets:
+  - path: .expo
+    reason: Expo cache
+    regenerate: expo start
+  - path: .expo-shared
+    reason: Expo shared cache
+    regenerate: expo start

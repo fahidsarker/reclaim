@@ -1,0 +1,10 @@
+name: poetry
+description: Poetry Python projects
+priority: 15
+
+detect:
+  toml_path:
+    file: pyproject.toml
+    path: tool.poetry
+
+targets: []

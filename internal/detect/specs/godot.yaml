@@ -1,0 +1,14 @@
+name: godot
+description: Godot projects
+priority: 10
+
+detect:
+  file_exists: project.godot
+
+targets:
+  - path: .godot
+    reason: Godot cache
+    regenerate: open Godot project
+  - path: .import
+    reason: Godot import cache
+    regenerate: open Godot project

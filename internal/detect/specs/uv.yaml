@@ -1,0 +1,8 @@
+name: uv
+description: uv Python projects
+priority: 15
+
+detect:
+  file_exists: uv.lock
+
+targets: []

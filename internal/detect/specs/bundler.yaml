@@ -1,0 +1,17 @@
+name: bundler
+description: Ruby Bundler projects
+priority: 10
+
+detect:
+  file_exists: Gemfile
+
+targets:
+  - path: vendor/bundle
+    reason: Bundled gems
+    regenerate: bundle install
+  - path: .bundle
+    reason: Bundler config cache
+    regenerate: bundle install
+  - path: tmp/cache
+    reason: Ruby tmp cache
+    regenerate: ""

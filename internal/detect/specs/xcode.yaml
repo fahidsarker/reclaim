@@ -1,0 +1,16 @@
+name: xcode
+description: Xcode projects
+priority: 10
+
+detect:
+  any:
+    - glob_exists: "*.xcodeproj"
+    - glob_exists: "*.xcworkspace"
+
+targets:
+  - path: build
+    reason: Xcode build output
+    regenerate: xcodebuild
+  - path: DerivedData
+    reason: Project-local DerivedData
+    regenerate: xcodebuild

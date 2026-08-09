@@ -1,0 +1,23 @@
+name: latex
+description: LaTeX documents
+priority: 10
+
+detect:
+  glob_exists: "*.tex"
+
+targets:
+  - path: "*.aux"
+    reason: LaTeX auxiliary file
+    regenerate: pdflatex
+  - path: "*.log"
+    reason: LaTeX log file
+    regenerate: pdflatex
+  - path: "*.out"
+    reason: LaTeX outline file
+    regenerate: pdflatex
+  - path: "*.toc"
+    reason: LaTeX table of contents
+    regenerate: pdflatex
+  - path: "_minted-*"
+    reason: minted cache
+    regenerate: pdflatex

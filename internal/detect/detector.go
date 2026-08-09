@@ -87,3 +87,8 @@ type Detector interface {
 	Priority() int
 	Detect(ctx *Context, dir string) (*Match, error)
 }
+
+// PostProcessor optionally refines projects after the walk has discovered them.
+type PostProcessor interface {
+	PostProcess(projects []*Project) error
+}

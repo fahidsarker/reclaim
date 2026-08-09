@@ -1,0 +1,11 @@
+name: nim
+description: Nim projects
+priority: 10
+
+detect:
+  glob_exists: "*.nimble"
+
+targets:
+  - path: nimcache
+    reason: Nim compiler cache
+    regenerate: nimble build

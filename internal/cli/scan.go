@@ -5,15 +5,20 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"sync"
 	"time"
 
 	"github.com/spf13/cobra"
 
+	"github.com/fahid/reclaim/internal/config"
+	"github.com/fahid/reclaim/internal/detect"
 	"github.com/fahid/reclaim/internal/exec"
 	"github.com/fahid/reclaim/internal/plan"
 	"github.com/fahid/reclaim/internal/scan"
 	"github.com/fahid/reclaim/internal/ui"
 )
+
+var loadUserSpecsOnce sync.Once
 
 func newScanCmd(f *sharedFlags) *cobra.Command {
 	return &cobra.Command{
@@ -89,6 +94,18 @@ func runPlanDry(cmd *cobra.Command, args []string, f *sharedFlags) error {
 }
 
 func buildSizedPlan(cmd *cobra.Command, args []string, f *sharedFlags) (*plan.Plan, error) {
+	if !f.noConfig {
+		loadUserSpecsOnce.Do(func() {
+			dir, err := config.DefaultSpecsDir()
+			if err != nil {
+				return
+			}
+			detect.LoadUserSpecsFromDir(dir, func(msg string) {
+				fmt.Fprintln(cmd.ErrOrStderr(), "warning:", msg)
+			})
+		})
+	}
+
 	root := resolvePath(args)
 	start := time.Now()
 	res, err := scan.Walk(scan.Options{
@@ -103,7 +120,7 @@ func buildSizedPlan(cmd *cobra.Command, args []string, f *sharedFlags) (*plan.Pl
 	}
 	scanDur := time.Since(start)
 
-	p := plan.Build(res)
+	p := plan.Build(res, plan.Options{Aggressive: f.aggressive})
 	p.Stats.DirsWalked = res.DirsWalked
 	p.Stats.Projects = len(res.Projects)
 	p.Stats.Depth = f.depth

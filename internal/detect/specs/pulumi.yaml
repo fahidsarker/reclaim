@@ -1,0 +1,12 @@
+name: pulumi
+description: Pulumi projects
+priority: 10
+
+detect:
+  file_exists: Pulumi.yaml
+
+targets:
+  - path: .pulumi
+    reason: Pulumi local state/plugins
+    regenerate: pulumi install
+    safety: requires_flag

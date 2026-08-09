@@ -1,0 +1,14 @@
+name: elixir
+description: Elixir Mix projects
+priority: 10
+
+detect:
+  file_exists: mix.exs
+
+targets:
+  - path: _build
+    reason: Mix build output
+    regenerate: mix compile
+  - path: deps
+    reason: Mix dependencies
+    regenerate: mix deps.get

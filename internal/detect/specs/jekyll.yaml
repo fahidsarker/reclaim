@@ -1,0 +1,22 @@
+name: jekyll
+description: Jekyll sites
+priority: 15
+
+detect:
+  all:
+    - file_exists: _config.yml
+    - file_exists: Gemfile
+    - file_contains:
+        file: Gemfile
+        pattern: "jekyll"
+
+targets:
+  - path: _site
+    reason: Jekyll build output
+    regenerate: bundle exec jekyll build
+  - path: .jekyll-cache
+    reason: Jekyll cache
+    regenerate: bundle exec jekyll build
+  - path: .sass-cache
+    reason: Sass cache
+    regenerate: bundle exec jekyll build

@@ -1,0 +1,24 @@
+name: astro
+description: Astro projects
+priority: 20
+extends: nodejs
+
+detect:
+  any:
+    - file_exists: astro.config.js
+    - file_exists: astro.config.mjs
+    - file_exists: astro.config.ts
+    - json_path:
+        file: package.json
+        path: dependencies.astro
+    - json_path:
+        file: package.json
+        path: devDependencies.astro
+
+targets:
+  - path: .astro
+    reason: Astro cache
+    regenerate: astro build
+  - path: dist
+    reason: Astro build output
+    regenerate: astro build

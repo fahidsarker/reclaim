@@ -1,0 +1,20 @@
+name: laravel
+description: Laravel applications
+priority: 20
+
+detect:
+  file_exists: artisan
+
+targets:
+  - path: bootstrap/cache
+    reason: Laravel bootstrap cache
+    regenerate: php artisan optimize
+  - path: storage/framework/cache
+    reason: Laravel framework cache
+    regenerate: php artisan cache:clear
+  - path: storage/framework/sessions
+    reason: Laravel sessions
+    regenerate: ""
+  - path: storage/framework/views
+    reason: Laravel compiled views
+    regenerate: php artisan view:clear

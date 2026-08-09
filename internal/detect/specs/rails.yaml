@@ -1,0 +1,20 @@
+name: rails
+description: Ruby on Rails applications
+priority: 20
+
+detect:
+  file_exists: config/application.rb
+
+targets:
+  - path: tmp/cache
+    reason: Rails cache
+    regenerate: bin/rails tmp:clear
+  - path: log
+    reason: Rails logs
+    regenerate: ""
+  - path: public/assets
+    reason: Precompiled assets
+    regenerate: bin/rails assets:precompile
+  - path: public/packs
+    reason: Webpacker packs
+    regenerate: bin/rails assets:precompile

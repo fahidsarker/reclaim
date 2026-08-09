@@ -1,0 +1,19 @@
+name: dart
+description: Plain Dart projects
+priority: 10
+
+detect:
+  all:
+    - file_exists: pubspec.yaml
+    - not:
+        yaml_path:
+          file: pubspec.yaml
+          path: flutter
+
+targets:
+  - path: .dart_tool
+    reason: Dart tool cache
+    regenerate: dart pub get
+  - path: build
+    reason: Dart build output
+    regenerate: dart compile

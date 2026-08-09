@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/fahid/reclaim/internal/detect"
+	_ "github.com/fahid/reclaim/internal/detect/builtin"
 	"github.com/fahid/reclaim/testdata/fixtures"
 )
 

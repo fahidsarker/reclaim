@@ -1,0 +1,23 @@
+name: python-venv
+description: Python virtual environments
+priority: 15
+
+detect:
+  any:
+    - file_exists: .venv/pyvenv.cfg
+    - file_exists: venv/pyvenv.cfg
+    - file_exists: env/pyvenv.cfg
+
+targets:
+  - path: .venv
+    reason: Python virtual environment
+    regenerate: python -m venv .venv
+    safety: requires_flag
+  - path: venv
+    reason: Python virtual environment
+    regenerate: python -m venv venv
+    safety: requires_flag
+  - path: env
+    reason: Python virtual environment
+    regenerate: python -m venv env
+    safety: requires_flag

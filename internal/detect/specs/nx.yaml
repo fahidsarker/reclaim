@@ -1,0 +1,15 @@
+name: nx
+description: Nx monorepos
+priority: 20
+extends: nodejs
+
+detect:
+  file_exists: nx.json
+
+targets:
+  - path: .nx/cache
+    reason: Nx cache
+    regenerate: nx build
+  - path: dist
+    reason: Nx build output
+    regenerate: nx build

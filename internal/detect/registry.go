@@ -3,8 +3,9 @@ package detect
 import "sync"
 
 var (
-	registryMu sync.RWMutex
-	detectors  []Detector
+	registryMu    sync.RWMutex
+	detectors     []Detector
+	postProcessors []PostProcessor
 )
 
 // Register adds a detector to the global registry.
@@ -13,6 +14,30 @@ func Register(d Detector) {
 	registryMu.Lock()
 	defer registryMu.Unlock()
 	detectors = append(detectors, d)
+	if pp, ok := d.(PostProcessor); ok {
+		postProcessors = append(postProcessors, pp)
+	}
+}
+
+// RegisterPostProcessor adds a post-processor that is not itself a Detector.
+func RegisterPostProcessor(pp PostProcessor) {
+	registryMu.Lock()
+	defer registryMu.Unlock()
+	postProcessors = append(postProcessors, pp)
+}
+
+// RunPostProcessors runs all registered post-processors over projects.
+func RunPostProcessors(projects []*Project) error {
+	registryMu.RLock()
+	list := make([]PostProcessor, len(postProcessors))
+	copy(list, postProcessors)
+	registryMu.RUnlock()
+	for _, pp := range list {
+		if err := pp.PostProcess(projects); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // Detectors returns a snapshot of registered detectors.

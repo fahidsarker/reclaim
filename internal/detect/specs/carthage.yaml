@@ -1,0 +1,12 @@
+name: carthage
+description: Carthage projects
+priority: 10
+
+detect:
+  file_exists: Cartfile
+
+targets:
+  - path: Carthage/Build
+    reason: Carthage build products
+    regenerate: carthage bootstrap
+    safety: requires_flag

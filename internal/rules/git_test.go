@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/fahid/reclaim/internal/detect"
+	_ "github.com/fahid/reclaim/internal/detect/builtin"
 	"github.com/fahid/reclaim/internal/plan"
 	"github.com/fahid/reclaim/internal/rules"
 	"github.com/fahid/reclaim/internal/scan"
@@ -184,7 +185,7 @@ func buildPlan(t *testing.T, root string) *plan.Plan {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return plan.Build(res)
+	return plan.Build(res, plan.Options{})
 }
 
 func mustDecision(t *testing.T, p *plan.Plan, relBase string) plan.Decision {

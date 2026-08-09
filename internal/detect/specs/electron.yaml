@@ -1,0 +1,26 @@
+name: electron
+description: Electron applications
+priority: 20
+extends: nodejs
+
+detect:
+  any:
+    - file_exists: electron-builder.yml
+    - file_exists: electron-builder.yaml
+    - json_path:
+        file: package.json
+        path: dependencies.electron
+    - json_path:
+        file: package.json
+        path: devDependencies.electron
+
+targets:
+  - path: dist
+    reason: Electron build output
+    regenerate: electron-builder
+  - path: out
+    reason: Electron pack output
+    regenerate: electron-builder
+  - path: release
+    reason: Electron release output
+    regenerate: electron-builder

@@ -1,0 +1,16 @@
+name: symfony
+description: Symfony applications
+priority: 20
+
+detect:
+  any:
+    - file_exists: symfony.lock
+    - file_exists: config/bundles.php
+
+targets:
+  - path: var/cache
+    reason: Symfony cache
+    regenerate: php bin/console cache:clear
+  - path: var/log
+    reason: Symfony logs
+    regenerate: ""

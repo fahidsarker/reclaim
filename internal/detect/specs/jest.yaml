@@ -1,0 +1,25 @@
+name: jest
+description: Jest or Vitest projects
+priority: 15
+extends: nodejs
+
+detect:
+  any:
+    - file_exists: jest.config.js
+    - file_exists: jest.config.ts
+    - file_exists: jest.config.mjs
+    - file_exists: jest.config.cjs
+    - file_exists: vitest.config.js
+    - file_exists: vitest.config.ts
+    - file_exists: vitest.config.mjs
+    - json_path:
+        file: package.json
+        path: devDependencies.jest
+    - json_path:
+        file: package.json
+        path: devDependencies.vitest
+
+targets:
+  - path: coverage
+    reason: Test coverage output
+    regenerate: npm test -- --coverage

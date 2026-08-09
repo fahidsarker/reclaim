@@ -1,0 +1,14 @@
+name: sbt
+description: sbt Scala projects
+priority: 10
+
+detect:
+  file_exists: build.sbt
+
+targets:
+  - path: target
+    reason: sbt build output
+    regenerate: sbt compile
+  - path: project/target
+    reason: sbt project build output
+    regenerate: sbt compile

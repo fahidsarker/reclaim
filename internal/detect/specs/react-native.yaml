@@ -1,0 +1,33 @@
+name: react-native
+description: React Native applications
+priority: 25
+extends: nodejs
+
+detect:
+  all:
+    - any:
+        - file_exists: metro.config.js
+        - file_exists: metro.config.ts
+        - file_exists: metro.config.cjs
+    - any:
+        - json_path:
+            file: package.json
+            path: dependencies.react-native
+        - json_path:
+            file: package.json
+            path: devDependencies.react-native
+
+targets:
+  - path: android/build
+    reason: Android build output
+    regenerate: npx react-native run-android
+  - path: android/.gradle
+    reason: Android Gradle cache
+    regenerate: npx react-native run-android
+  - path: ios/Pods
+    reason: iOS CocoaPods dependencies
+    regenerate: pod install
+    safety: requires_flag
+  - path: ios/build
+    reason: iOS build output
+    regenerate: npx react-native run-ios

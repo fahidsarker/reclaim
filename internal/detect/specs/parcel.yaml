@@ -1,0 +1,21 @@
+name: parcel
+description: Parcel bundler projects
+priority: 20
+extends: nodejs
+
+detect:
+  any:
+    - json_path:
+        file: package.json
+        path: dependencies.parcel
+    - json_path:
+        file: package.json
+        path: devDependencies.parcel
+
+targets:
+  - path: .parcel-cache
+    reason: Parcel cache
+    regenerate: parcel build
+  - path: dist
+    reason: Parcel build output
+    regenerate: parcel build

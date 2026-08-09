@@ -1,0 +1,12 @@
+name: cocoapods
+description: CocoaPods projects
+priority: 10
+
+detect:
+  file_exists: Podfile
+
+targets:
+  - path: Pods
+    reason: CocoaPods dependencies
+    regenerate: pod install
+    safety: requires_flag

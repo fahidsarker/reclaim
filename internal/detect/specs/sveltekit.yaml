@@ -1,0 +1,16 @@
+name: sveltekit
+description: SvelteKit applications
+priority: 20
+extends: nodejs
+
+detect:
+  all:
+    - file_exists: svelte.config.js
+    - file_contains:
+        file: package.json
+        pattern: '"@sveltejs/kit"'
+
+targets:
+  - path: .svelte-kit
+    reason: SvelteKit build cache
+    regenerate: vite build

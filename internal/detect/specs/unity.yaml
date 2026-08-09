@@ -1,0 +1,27 @@
+name: unity
+description: Unity projects
+priority: 10
+
+detect:
+  file_exists: ProjectSettings/ProjectVersion.txt
+
+targets:
+  - path: Library
+    reason: Unity Library cache
+    regenerate: open Unity project
+    safety: requires_flag
+  - path: Temp
+    reason: Unity temp files
+    regenerate: open Unity project
+  - path: Obj
+    reason: Unity Obj cache
+    regenerate: open Unity project
+  - path: Build
+    reason: Unity build output
+    regenerate: Unity build
+  - path: Logs
+    reason: Unity logs
+    regenerate: ""
+  - path: UserSettings
+    reason: Unity user settings
+    regenerate: open Unity project

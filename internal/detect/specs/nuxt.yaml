@@ -1,0 +1,24 @@
+name: nuxt
+description: Nuxt applications
+priority: 20
+extends: nodejs
+
+detect:
+  any:
+    - file_exists: nuxt.config.js
+    - file_exists: nuxt.config.ts
+    - file_exists: nuxt.config.mjs
+    - json_path:
+        file: package.json
+        path: dependencies.nuxt
+    - json_path:
+        file: package.json
+        path: devDependencies.nuxt
+
+targets:
+  - path: .nuxt
+    reason: Nuxt build cache
+    regenerate: nuxt build
+  - path: .output
+    reason: Nuxt build output
+    regenerate: nuxt build

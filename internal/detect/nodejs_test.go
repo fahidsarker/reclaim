@@ -6,12 +6,14 @@ import (
 	"testing"
 
 	"github.com/fahid/reclaim/internal/detect"
+	"github.com/fahid/reclaim/internal/detect/builtin"
 	"github.com/fahid/reclaim/internal/scan"
 )
 
 func TestMain(m *testing.M) {
 	detect.ResetRegistryForTest()
 	detect.MustLoadEmbedded()
+	builtin.RegisterAll()
 	os.Exit(m.Run())
 }
 

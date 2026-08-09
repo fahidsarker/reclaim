@@ -32,6 +32,15 @@ func DefaultGlobalPath() (string, error) {
 	return filepath.Join(dir, "reclaim", "config.yaml"), nil
 }
 
+// DefaultSpecsDir returns ~/.config/reclaim/specs (or OS equivalent).
+func DefaultSpecsDir() (string, error) {
+	dir, err := os.UserConfigDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, "reclaim", "specs"), nil
+}
+
 // LoadGlobal loads the global config file. Missing file yields an empty Global.
 // Patterns are compiled relative to patternBase (typically the scan root).
 func LoadGlobal(patternBase string) (*Global, error) {

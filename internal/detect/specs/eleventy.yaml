@@ -1,0 +1,15 @@
+name: eleventy
+description: Eleventy sites
+priority: 15
+extends: nodejs
+
+detect:
+  any:
+    - file_exists: .eleventy.js
+    - file_exists: eleventy.config.js
+    - file_exists: eleventy.config.cjs
+
+targets:
+  - path: _site
+    reason: Eleventy build output
+    regenerate: npx @11ty/eleventy

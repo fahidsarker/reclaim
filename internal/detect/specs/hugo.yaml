@@ -1,0 +1,29 @@
+name: hugo
+description: Hugo sites
+priority: 10
+
+detect:
+  any:
+    - file_exists: hugo.toml
+    - file_exists: hugo.yaml
+    - all:
+        - file_exists: config.toml
+        - file_contains:
+            file: config.toml
+            pattern: "(?i)baseURL|theme"
+    - all:
+        - file_exists: config.yaml
+        - file_contains:
+            file: config.yaml
+            pattern: "(?i)baseURL|theme"
+
+targets:
+  - path: public
+    reason: Hugo publish directory
+    regenerate: hugo
+  - path: resources/_gen
+    reason: Hugo generated resources
+    regenerate: hugo
+  - path: .hugo_build.lock
+    reason: Hugo build lock
+    regenerate: hugo

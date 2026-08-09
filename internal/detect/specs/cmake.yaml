@@ -1,0 +1,20 @@
+name: cmake
+description: CMake projects
+priority: 10
+
+detect:
+  file_exists: CMakeLists.txt
+
+targets:
+  - path: build
+    reason: CMake build directory
+    regenerate: cmake --build build
+  - path: "cmake-build-*"
+    reason: CLion CMake build directory
+    regenerate: cmake --build
+  - path: CMakeFiles
+    reason: CMake generated files
+    regenerate: cmake .
+  - path: _build
+    reason: CMake build directory
+    regenerate: cmake --build _build

@@ -18,6 +18,7 @@ type sharedFlags struct {
 	noColor          bool
 	iKnowWhatImDoing bool
 	noConfig         bool
+	aggressive       bool
 }
 
 func defaultConcurrency() int {
@@ -64,6 +65,7 @@ func newRootCmd() *cobra.Command {
 	pf.BoolVar(&f.noColor, "no-color", false, "disable coloured output")
 	pf.BoolVar(&f.iKnowWhatImDoing, "i-know-what-im-doing", false, "allow scanning / or $HOME")
 	pf.BoolVar(&f.noConfig, "no-config", false, "ignore all .reclaim.yaml and global config")
+	pf.BoolVar(&f.aggressive, "aggressive", false, "include SafetyRequiresFlag targets (Pods, venv, .terraform, …)")
 
 	cmd.AddCommand(newScanCmd(f))
 	cmd.AddCommand(newPlanCmd(f))

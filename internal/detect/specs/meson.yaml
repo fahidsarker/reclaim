@@ -1,0 +1,14 @@
+name: meson
+description: Meson projects
+priority: 10
+
+detect:
+  file_exists: meson.build
+
+targets:
+  - path: build
+    reason: Meson build directory
+    regenerate: meson compile -C build
+  - path: builddir
+    reason: Meson build directory
+    regenerate: meson compile -C builddir

@@ -1,0 +1,21 @@
+name: unreal
+description: Unreal Engine projects
+priority: 10
+
+detect:
+  glob_exists: "*.uproject"
+
+targets:
+  - path: Binaries
+    reason: Unreal binaries
+    regenerate: build in Unreal Editor
+  - path: Intermediate
+    reason: Unreal intermediate files
+    regenerate: build in Unreal Editor
+  - path: DerivedDataCache
+    reason: Unreal derived data cache
+    regenerate: build in Unreal Editor
+  - path: Saved
+    reason: Unreal saved data
+    regenerate: ""
+    safety: requires_flag

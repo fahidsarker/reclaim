@@ -1,0 +1,11 @@
+name: composer
+description: PHP Composer projects
+priority: 10
+
+detect:
+  file_exists: composer.json
+
+targets:
+  - path: vendor
+    reason: Composer dependencies
+    regenerate: composer install

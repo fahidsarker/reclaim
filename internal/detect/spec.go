@@ -349,6 +349,15 @@ func firstManifestHint(p *Predicate) string {
 	return ""
 }
 
+// ambiguousPruneNames are single-segment target names that are also common
+// non-artifact directory names (e.g. monorepo packages/). They still prune
+// locally when a matching project owns them, but must not seed global prune.
+var ambiguousPruneNames = map[string]struct{}{
+	"app": {}, "packages": {}, "project": {}, "env": {}, "log": {},
+	"public": {}, "content": {}, "site": {}, "release": {}, "out": {},
+	"tmp": {}, "src": {},
+}
+
 // TargetPruneBasenames returns first path segments of all literal (non-glob) targets
 // across resolved specs, used to seed walker prune/orphan detection.
 func TargetPruneBasenames(specs []*ResolvedSpec) []string {
@@ -360,9 +369,11 @@ func TargetPruneBasenames(specs []*ResolvedSpec) []string {
 				// For globs like **/__pycache__ or *.egg-info, also prune the basename pattern tip.
 				base := path.Base(t.Path)
 				if base != "" && base != "." && base != "*" && !strings.ContainsAny(base, "*?[") {
-					if _, ok := seen[base]; !ok {
-						seen[base] = struct{}{}
-						out = append(out, base)
+					if _, ok := ambiguousPruneNames[base]; !ok {
+						if _, ok := seen[base]; !ok {
+							seen[base] = struct{}{}
+							out = append(out, base)
+						}
 					}
 				}
 				if base == "__pycache__" || strings.HasSuffix(t.Path, "__pycache__") {
@@ -374,8 +385,17 @@ func TargetPruneBasenames(specs []*ResolvedSpec) []string {
 				continue
 			}
 			rel := filepath.ToSlash(t.Path)
-			seg := strings.SplitN(rel, "/", 2)[0]
+			// Only single-segment targets seed global prune/orphan detection.
+			// Multi-segment paths like app/build or ios/Pods must not treat
+			// generic first segments (app, ios, project) as artifacts everywhere.
+			if strings.Contains(rel, "/") {
+				continue
+			}
+			seg := rel
 			if seg == "" || seg == "." {
+				continue
+			}
+			if _, ok := ambiguousPruneNames[seg]; ok {
 				continue
 			}
 			if _, ok := seen[seg]; ok {
@@ -425,7 +445,7 @@ func EmbeddedSpecs() []*ResolvedSpec {
 	return embeddedSpecs
 }
 
-// PruneBasenames returns artifact basename seeds from embedded specs.
+// PruneBasenames returns artifact basename seeds from embedded and user specs.
 func PruneBasenames() []string {
 	MustLoadEmbedded()
 	out := make([]string, len(pruneBasenames))
@@ -433,11 +453,33 @@ func PruneBasenames() []string {
 	return out
 }
 
+// AppendPruneBasenames merges additional basename seeds (e.g. from user specs).
+func AppendPruneBasenames(names []string) {
+	MustLoadEmbedded()
+	registryMu.Lock()
+	defer registryMu.Unlock()
+	seen := map[string]struct{}{}
+	for _, b := range pruneBasenames {
+		seen[b] = struct{}{}
+	}
+	for _, n := range names {
+		if n == "" {
+			continue
+		}
+		if _, ok := seen[n]; ok {
+			continue
+		}
+		seen[n] = struct{}{}
+		pruneBasenames = append(pruneBasenames, n)
+	}
+}
+
 // ResetRegistryForTest clears registered detectors. For tests only.
 func ResetRegistryForTest() {
 	registryMu.Lock()
 	defer registryMu.Unlock()
 	detectors = nil
+	postProcessors = nil
 	embeddedOnce = sync.Once{}
 	embeddedErr = nil
 	embeddedSpecs = nil
