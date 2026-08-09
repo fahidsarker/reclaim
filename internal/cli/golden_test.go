@@ -82,7 +82,11 @@ func TestPlan_CompositeGolden(t *testing.T) {
 }
 
 func normalizeGolden(s, root string) string {
+	// JSON encodes Windows `\` as `\\`; rewrite that form first.
+	s = strings.ReplaceAll(s, strings.ReplaceAll(root, `\`, `\\`), "/FIXTURE")
 	s = strings.ReplaceAll(s, root, "/FIXTURE")
+	// Slash-normalize for golden compare (Windows keeps native separators in CLI/JSON).
+	s = strings.ReplaceAll(s, `\`, `/`)
 	// Duration lines vary slightly; normalize timing.
 	reDur := regexp.MustCompile(`\d+(\.\d+)?(ms|s|µs|us|m)`)
 	s = reDur.ReplaceAllString(s, "TIME")
