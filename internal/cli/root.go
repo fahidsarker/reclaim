@@ -1,7 +1,7 @@
 package cli
 
 import (
-	"fmt"
+	"errors"
 	"runtime"
 
 	"github.com/spf13/cobra"
@@ -12,6 +12,9 @@ type sharedFlags struct {
 	depth            int
 	concurrency      int
 	dryRun           bool
+	yes              bool
+	noSize           bool
+	noColor          bool
 	iKnowWhatImDoing bool
 	noConfig         bool
 }
@@ -54,6 +57,9 @@ func newRootCmd() *cobra.Command {
 	pf.IntVarP(&f.depth, "depth", "d", 8, "max directory depth below root")
 	pf.IntVar(&f.concurrency, "concurrency", defaultConcurrency(), "walker parallelism")
 	pf.BoolVarP(&f.dryRun, "dry-run", "n", false, "print the plan and exit without deleting")
+	pf.BoolVarP(&f.yes, "yes", "y", false, "skip the confirmation prompt")
+	pf.BoolVar(&f.noSize, "no-size", false, "skip size computation")
+	pf.BoolVar(&f.noColor, "no-color", false, "disable coloured output")
 	pf.BoolVar(&f.iKnowWhatImDoing, "i-know-what-im-doing", false, "allow scanning / or $HOME")
 	pf.BoolVar(&f.noConfig, "no-config", false, "ignore all .reclaim.yaml and global config")
 
@@ -72,5 +78,17 @@ func resolvePath(args []string) string {
 }
 
 func errExecuteUnavailable() error {
-	return fmt.Errorf("deletion is not implemented yet; use `reclaim plan` or `reclaim scan --dry-run` to list candidates")
+	return exitErrorf(1, "deletion is not implemented yet; use `reclaim plan` or `reclaim scan --dry-run` to list candidates")
+}
+
+// ExitCode returns the process exit code for err, defaulting to 1.
+func ExitCode(err error) int {
+	if err == nil {
+		return 0
+	}
+	var ee *ExitError
+	if errors.As(err, &ee) {
+		return ee.Code
+	}
+	return 1
 }

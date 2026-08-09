@@ -1,8 +1,6 @@
 package plan
 
 import (
-	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -46,6 +44,7 @@ type Decision struct {
 type Plan struct {
 	Root      string
 	Decisions []Decision
+	Stats     Stats
 }
 
 const reasonKeptByControl = "kept by .reclaim.yaml"
@@ -157,107 +156,8 @@ func attachGitRepo(project *detect.Project, cache *rules.GitCache) {
 	project.GitRepo = &detect.GitRepo{Root: r.Root}
 }
 
-// WriteHuman prints a plan listing to w.
-func WriteHuman(w io.Writer, p *Plan) error {
-	var deletes, skips, kept []Decision
-	for _, d := range p.Decisions {
-		switch d.Verdict {
-		case VerdictDelete:
-			deletes = append(deletes, d)
-		case VerdictSkipped:
-			skips = append(skips, d)
-		case VerdictKept:
-			kept = append(kept, d)
-		}
-	}
-
-	if _, err := fmt.Fprintf(w, "Scanning %s…\n\n", p.Root); err != nil {
-		return err
-	}
-
-	if len(deletes) == 0 && len(skips) == 0 && len(kept) == 0 {
-		if _, err := fmt.Fprintln(w, "No reclaimable targets found."); err != nil {
-			return err
-		}
-		return nil
-	}
-
-	if len(deletes) > 0 {
-		if _, err := fmt.Fprintln(w, "Delete candidates"); err != nil {
-			return err
-		}
-		for _, d := range deletes {
-			fw := "unknown"
-			proj := d.Target.Path
-			if d.Project != nil {
-				fw = d.Project.Framework
-				proj = d.Project.Root
-			}
-			extra := ""
-			if d.Target.Regenerate != "" {
-				extra = "  → " + d.Target.Regenerate
-			}
-			if _, err := fmt.Fprintf(w, "  %s\n    %s  [%s]  %s%s\n",
-				proj,
-				displayPath(d.Target.Path, d.Project),
-				fw,
-				d.Reason,
-				extra,
-			); err != nil {
-				return err
-			}
-		}
-		if _, err := fmt.Fprintln(w); err != nil {
-			return err
-		}
-	}
-
-	if len(kept) > 0 {
-		if _, err := fmt.Fprintf(w, "Kept (%d)\n", len(kept)); err != nil {
-			return err
-		}
-		for _, d := range kept {
-			if _, err := fmt.Fprintf(w, "  %s    %s\n", d.Target.Path, d.Reason); err != nil {
-				return err
-			}
-		}
-		if _, err := fmt.Fprintln(w); err != nil {
-			return err
-		}
-	}
-
-	if len(skips) > 0 {
-		if _, err := fmt.Fprintf(w, "Skipped (%d)\n", len(skips)); err != nil {
-			return err
-		}
-		for _, d := range skips {
-			hint := rules.HintForReason(d.Reason, filepath.Base(d.Target.Path))
-			if hint != "" {
-				if _, err := fmt.Fprintf(w, "  %s    %s    → %s\n", d.Target.Path, d.Reason, hint); err != nil {
-					return err
-				}
-			} else {
-				if _, err := fmt.Fprintf(w, "  %s    %s\n", d.Target.Path, d.Reason); err != nil {
-					return err
-				}
-			}
-		}
-		if _, err := fmt.Fprintln(w); err != nil {
-			return err
-		}
-	}
-
-	if len(kept) > 0 {
-		if _, err := fmt.Fprintf(w, "%d delete · %d kept · %d skipped\n", len(deletes), len(kept), len(skips)); err != nil {
-			return err
-		}
-	} else if _, err := fmt.Fprintf(w, "%d delete · %d skipped\n", len(deletes), len(skips)); err != nil {
-		return err
-	}
-	return nil
-}
-
-func displayPath(abs string, project *detect.Project) string {
+// DisplayPath returns the target path relative to the project root when possible.
+func DisplayPath(abs string, project *detect.Project) string {
 	if project == nil {
 		return abs
 	}

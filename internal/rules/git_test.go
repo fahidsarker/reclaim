@@ -11,6 +11,7 @@ import (
 	"github.com/fahid/reclaim/internal/plan"
 	"github.com/fahid/reclaim/internal/rules"
 	"github.com/fahid/reclaim/internal/scan"
+	"github.com/fahid/reclaim/internal/ui"
 	"github.com/fahid/reclaim/testdata/fixtures"
 )
 
@@ -79,7 +80,7 @@ func TestGit_NotIgnored_Skipped(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	if err := plan.WriteHuman(&buf, p); err != nil {
+	if err := ui.Render(&buf, p, ui.RenderOptions{NoSize: true, NoColor: true}); err != nil {
 		t.Fatal(err)
 	}
 	out := buf.String()
