@@ -50,6 +50,34 @@ type pathPred struct {
 	Path string `yaml:"path"`
 }
 
+// MarshalYAML emits a single-key predicate node.
+func (p Predicate) MarshalYAML() (any, error) {
+	switch {
+	case p.FileExists != "":
+		return map[string]any{"file_exists": p.FileExists}, nil
+	case p.DirExists != "":
+		return map[string]any{"dir_exists": p.DirExists}, nil
+	case p.GlobExists != "":
+		return map[string]any{"glob_exists": p.GlobExists}, nil
+	case p.FileContains != nil:
+		return map[string]any{"file_contains": p.FileContains}, nil
+	case p.JSONPath != nil:
+		return map[string]any{"json_path": p.JSONPath}, nil
+	case p.YAMLPath != nil:
+		return map[string]any{"yaml_path": p.YAMLPath}, nil
+	case p.TOMLPath != nil:
+		return map[string]any{"toml_path": p.TOMLPath}, nil
+	case len(p.Any) > 0:
+		return map[string]any{"any": p.Any}, nil
+	case len(p.All) > 0:
+		return map[string]any{"all": p.All}, nil
+	case p.Not != nil:
+		return map[string]any{"not": *p.Not}, nil
+	default:
+		return map[string]any{}, nil
+	}
+}
+
 // UnmarshalYAML parses a single-key predicate node.
 func (p *Predicate) UnmarshalYAML(data []byte) error {
 	var raw map[string]yaml.RawMessage

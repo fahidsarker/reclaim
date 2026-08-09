@@ -51,15 +51,21 @@ const reasonKeptByControl = "kept by .reclaim.yaml"
 
 // Options controls plan evaluation.
 type Options struct {
-	Aggressive bool // include SafetyRequiresFlag targets
+	Aggressive       bool // include SafetyRequiresFlag targets
+	UseGitBinary     bool
+	Frameworks       []string // CLI allowlist (post-filter)
+	ExcludeFramework []string // CLI denylist (post-filter)
 }
 
 // Build turns walk candidates into decisions using safety, control, and git rules.
 func Build(res *scan.Result, opts Options) *Plan {
 	p := &Plan{Root: res.Root}
-	gitCache := rules.NewGitCache()
+	gitCache := rules.NewGitCacheWithOptions(rules.GitOptions{UseBinary: opts.UseGitBinary})
 
 	for _, c := range res.Candidates {
+		if c.Project != nil && !rules.FrameworkAllowed(c.Project.Framework, opts.Frameworks, opts.ExcludeFramework) {
+			continue
+		}
 		switch c.Kind {
 		case scan.KindOrphan:
 			p.Decisions = append(p.Decisions, Decision{
@@ -126,13 +132,14 @@ func evaluateDeleteCandidate(root string, c scan.Candidate, gitCache *rules.GitC
 		bypassGit = true
 	}
 
+	gitOpts := rules.GitOptions{UseBinary: opts.UseGitBinary || (gitCache != nil && gitCache.UseBinary)}
 	if !bypassGit {
 		attachGitRepo(c.Project, gitCache)
 		var gitRepo *rules.GitRepo
 		if c.Project != nil {
 			gitRepo = gitCache.RepoFor(c.Project.Root)
 		}
-		if reason := rules.CheckGit(gitRepo, c.Target.Path); reason != "" {
+		if reason := rules.CheckGitOpts(gitRepo, c.Target.Path, gitOpts); reason != "" {
 			base.Verdict = VerdictSkipped
 			base.Reason = reason
 			return base

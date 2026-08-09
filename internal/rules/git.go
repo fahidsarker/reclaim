@@ -1,8 +1,10 @@
 package rules
 
 import (
+	"bytes"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -27,11 +29,25 @@ type GitRepo struct {
 	index   *index.Index
 }
 
+// GitOptions controls how ignore matching is performed.
+type GitOptions struct {
+	UseBinary bool // shell out to `git check-ignore` for ignore checks
+}
+
+// GitInspection is a detailed git status for explain output.
+type GitInspection struct {
+	RepoRoot string
+	Ignored  bool
+	Tracked  bool
+	Dirty    bool
+}
+
 // GitCache memoises FindGitRepo / open work per worktree root.
 type GitCache struct {
-	byStart map[string]*GitRepo // start dir → repo (or nil sentinel via miss)
-	byRoot  map[string]*GitRepo
-	misses  map[string]struct{}
+	UseBinary bool
+	byStart   map[string]*GitRepo // start dir → repo (or nil sentinel via miss)
+	byRoot    map[string]*GitRepo
+	misses    map[string]struct{}
 }
 
 // NewGitCache returns an empty cache.
@@ -41,6 +57,13 @@ func NewGitCache() *GitCache {
 		byRoot:  make(map[string]*GitRepo),
 		misses:  make(map[string]struct{}),
 	}
+}
+
+// NewGitCacheWithOptions returns a cache with ignore-backend options.
+func NewGitCacheWithOptions(opts GitOptions) *GitCache {
+	c := NewGitCache()
+	c.UseBinary = opts.UseBinary
+	return c
 }
 
 // RepoFor walks up from start to find a git repo, caching the result.
@@ -137,6 +160,11 @@ func openGitRepo(root string) (*GitRepo, error) {
 // Returns "" if deletion is allowed, otherwise one of the Reason* constants.
 // A nil repo means no git repository — deletion is allowed.
 func CheckGit(repo *GitRepo, targetPath string) string {
+	return CheckGitOpts(repo, targetPath, GitOptions{})
+}
+
+// CheckGitOpts is CheckGit with ignore-backend options.
+func CheckGitOpts(repo *GitRepo, targetPath string, opts GitOptions) string {
 	if repo == nil {
 		return ""
 	}
@@ -159,10 +187,33 @@ func CheckGit(repo *GitRepo, targetPath string) string {
 	if isTracked(repo, relSlash) {
 		return ReasonTracked
 	}
-	if isIgnored(repo, relSlash, abs) {
+	if isIgnoredOpts(repo, relSlash, abs, opts) {
 		return ""
 	}
 	return ReasonNotIgnored
+}
+
+// InspectGit returns detailed git facts for explain without changing CheckGit semantics.
+func InspectGit(repo *GitRepo, targetPath string, opts GitOptions) GitInspection {
+	if repo == nil {
+		return GitInspection{}
+	}
+	abs, err := filepath.Abs(targetPath)
+	if err != nil {
+		return GitInspection{RepoRoot: repo.Root}
+	}
+	abs = filepath.Clean(abs)
+	rel, err := filepath.Rel(repo.Root, abs)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return GitInspection{RepoRoot: repo.Root}
+	}
+	relSlash := filepath.ToSlash(rel)
+	return GitInspection{
+		RepoRoot: repo.Root,
+		Ignored:  isIgnoredOpts(repo, relSlash, abs, opts),
+		Tracked:  isTracked(repo, relSlash),
+		Dirty:    hasUncommittedInside(repo, relSlash),
+	}
 }
 
 func isTracked(repo *GitRepo, relSlash string) bool {
@@ -212,6 +263,16 @@ func hasUncommittedInside(repo *GitRepo, relSlash string) bool {
 }
 
 func isIgnored(repo *GitRepo, relSlash, abs string) bool {
+	return isIgnoredOpts(repo, relSlash, abs, GitOptions{})
+}
+
+func isIgnoredOpts(repo *GitRepo, relSlash, abs string, opts GitOptions) bool {
+	if opts.UseBinary {
+		if ok, err := gitCheckIgnoreBinary(repo.Root, relSlash); err == nil {
+			return ok
+		}
+		// Fall back to go-git matcher if git is unavailable.
+	}
 	info, err := os.Lstat(abs)
 	isDir := err == nil && info.IsDir()
 	return isIgnoredPathDir(repo, relSlash, isDir)
@@ -230,6 +291,24 @@ func isIgnoredPathDir(repo *GitRepo, relSlash string, isDir bool) bool {
 	}
 	parts := strings.Split(relSlash, "/")
 	return repo.matcher.Match(parts, isDir)
+}
+
+// gitCheckIgnoreBinary runs `git check-ignore --stdin -z` for one relative path.
+// Exit 0 means ignored; exit 1 means not ignored.
+func gitCheckIgnoreBinary(repoRoot, relSlash string) (bool, error) {
+	cmd := exec.Command("git", "-C", repoRoot, "check-ignore", "--stdin", "-z")
+	cmd.Stdin = bytes.NewReader([]byte(relSlash + "\x00"))
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	err := cmd.Run()
+	if err == nil {
+		return stdout.Len() > 0, nil
+	}
+	if ee, ok := err.(*exec.ExitError); ok && ee.ExitCode() == 1 {
+		return false, nil
+	}
+	return false, err
 }
 
 // HintForReason returns the Skipped-section hint for a git (or other) reason.

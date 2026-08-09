@@ -1,0 +1,124 @@
+{
+  "version": 1,
+  "root": "/FIXTURE",
+  "scannedAt": "GOLDEN",
+  "projects": [
+    {
+      "root": "/FIXTURE/api",
+      "framework": "nodejs",
+      "targets": [
+        {
+          "path": "/FIXTURE/api/node_modules",
+          "relPath": "node_modules",
+          "size": null,
+          "modTime": "GOLDEN",
+          "reason": "Node.js dependency cache",
+          "regenerate": "npm install",
+          "verdict": "delete"
+        }
+      ]
+    },
+    {
+      "root": "/FIXTURE/py",
+      "framework": "python",
+      "targets": [
+        {
+          "path": "/FIXTURE/py/src/pkg/__pycache__",
+          "relPath": "src/pkg/__pycache__",
+          "size": null,
+          "modTime": "GOLDEN",
+          "reason": "Python bytecode cache",
+          "regenerate": "python -m compileall",
+          "verdict": "delete"
+        },
+        {
+          "path": "/FIXTURE/py/.pytest_cache",
+          "relPath": ".pytest_cache",
+          "size": null,
+          "modTime": "GOLDEN",
+          "reason": "pytest cache",
+          "regenerate": "pytest",
+          "verdict": "delete"
+        },
+        {
+          "path": "/FIXTURE/py/pkg.egg-info",
+          "relPath": "pkg.egg-info",
+          "size": null,
+          "modTime": "GOLDEN",
+          "reason": "Python egg-info metadata",
+          "regenerate": "pip install -e .",
+          "verdict": "delete"
+        },
+        {
+          "path": "/FIXTURE/py/build",
+          "relPath": "build",
+          "size": null,
+          "modTime": "GOLDEN",
+          "reason": "Python build output",
+          "regenerate": "python -m build",
+          "verdict": "delete"
+        },
+        {
+          "path": "/FIXTURE/py/dist",
+          "relPath": "dist",
+          "size": null,
+          "modTime": "GOLDEN",
+          "reason": "Python distribution output",
+          "regenerate": "python -m build",
+          "verdict": "delete"
+        }
+      ]
+    },
+    {
+      "root": "/FIXTURE/rust-svc",
+      "framework": "rust",
+      "targets": [
+        {
+          "path": "/FIXTURE/rust-svc/target",
+          "relPath": "target",
+          "size": null,
+          "modTime": "GOLDEN",
+          "reason": "Cargo build output",
+          "regenerate": "cargo build",
+          "verdict": "delete"
+        }
+      ]
+    },
+    {
+      "root": "/FIXTURE/web",
+      "framework": "nextjs",
+      "targets": [
+        {
+          "path": "/FIXTURE/web/node_modules",
+          "relPath": "node_modules",
+          "size": null,
+          "modTime": "GOLDEN",
+          "reason": "Node.js dependency cache",
+          "regenerate": "npm install",
+          "verdict": "delete"
+        },
+        {
+          "path": "/FIXTURE/web/.next",
+          "relPath": ".next",
+          "size": null,
+          "modTime": "GOLDEN",
+          "reason": "Next.js build cache and output",
+          "regenerate": "next build",
+          "verdict": "delete"
+        }
+      ]
+    }
+  ],
+  "skipped": [
+    {
+      "path": "/FIXTURE/legacy/node_modules",
+      "reason": "not in .gitignore",
+      "hint": "add `node_modules` to .gitignore"
+    }
+  ],
+  "totals": {
+    "projects": 4,
+    "targets": 9,
+    "bytes": 0
+  }
+}

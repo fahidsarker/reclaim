@@ -42,13 +42,32 @@ type ResolvedSpec struct {
 	ManifestHint string // first file_exists / path file in detect tree, for Match.Manifest
 }
 
+// Detector source labels for `reclaim detectors list`.
+const (
+	SourceBuiltin = "builtin"
+	SourceUser    = "user"
+	SourceGo      = "go"
+)
+
 // SpecDetector evaluates a ResolvedSpec against a directory.
 type SpecDetector struct {
-	Spec *ResolvedSpec
+	Spec   *ResolvedSpec
+	Source string // SourceBuiltin or SourceUser
 }
 
 func (d *SpecDetector) Name() string  { return d.Spec.Name }
 func (d *SpecDetector) Priority() int { return d.Spec.Priority }
+
+// DetectorSource returns the registration source for d.
+func DetectorSource(d Detector) string {
+	if sd, ok := d.(*SpecDetector); ok {
+		if sd.Source != "" {
+			return sd.Source
+		}
+		return SourceBuiltin
+	}
+	return SourceGo
+}
 
 func (d *SpecDetector) Detect(ctx *Context, dir string) (*Match, error) {
 	switch d.Spec.Detect.eval(ctx, dir) {
@@ -431,7 +450,7 @@ func MustLoadEmbedded() {
 		embeddedSpecs = specs
 		pruneBasenames = TargetPruneBasenames(specs)
 		for _, s := range specs {
-			Register(&SpecDetector{Spec: s})
+			Register(&SpecDetector{Spec: s, Source: SourceBuiltin})
 		}
 	})
 	if embeddedErr != nil {

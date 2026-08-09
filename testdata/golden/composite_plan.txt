@@ -1,0 +1,25 @@
+Scanning /FIXTURE (depth 8)… 6 dirs, 5 projects, TIME
+
+/FIXTURE/api  nodejs
+  node_modules                    npm install
+
+/FIXTURE/py  python
+  .pytest_cache                   pytest
+  build                           python -m build
+  dist                            python -m build
+  pkg.egg-info                    pip install -e .
+  src/pkg/__pycache__             python -m compileall
+
+/FIXTURE/rust-svc  rust
+  target                          cargo build
+
+/FIXTURE/web  nextjs
+  .next                           next build
+  node_modules                    npm install
+
+Skipped (1)
+  /FIXTURE/legacy/node_modules  not in .gitignore       → add `node_modules` to .gitignore
+
+─────────────────────────────────────────────────────────
+ 4 projects · 9 targets
+Deletion is permanent. Use --to-trash to recover later.

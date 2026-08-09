@@ -22,6 +22,7 @@ import (
 type RenderOptions struct {
 	NoSize  bool
 	NoColor bool
+	Quiet   bool  // suppress progress headers when set by caller
 	Color   *bool // optional override; nil → auto from NoColor / NO_COLOR / TTY
 }
 
@@ -85,21 +86,6 @@ func Render(w io.Writer, p *plan.Plan, opts RenderOptions) error {
 	}
 	st := newStyles(useColor(opts, w))
 
-	depth := p.Stats.Depth
-	if depth == 0 && p.Stats.DirsWalked > 0 {
-		depth = 8
-	}
-	scanLine := fmt.Sprintf("Scanning %s (depth %d)… %s dirs, %s projects, %s",
-		p.Root,
-		depth,
-		humanize.Comma(int64(p.Stats.DirsWalked)),
-		humanize.Comma(int64(p.Stats.Projects)),
-		formatDur(p.Stats.ScanDuration),
-	)
-	if _, err := fmt.Fprintln(w, st.header.Render(scanLine)); err != nil {
-		return err
-	}
-
 	var deletes, skips, kept []plan.Decision
 	for _, d := range p.Decisions {
 		switch d.Verdict {
@@ -112,14 +98,30 @@ func Render(w io.Writer, p *plan.Plan, opts RenderOptions) error {
 		}
 	}
 
-	if !opts.NoSize {
-		sizeLine := fmt.Sprintf("Sizing %d targets… done, %s", len(deletes), formatDur(p.Stats.SizeDuration))
-		if _, err := fmt.Fprintln(w, st.header.Render(sizeLine)); err != nil {
+	if !opts.Quiet {
+		depth := p.Stats.Depth
+		if depth == 0 && p.Stats.DirsWalked > 0 {
+			depth = 8
+		}
+		scanLine := fmt.Sprintf("Scanning %s (depth %d)… %s dirs, %s projects, %s",
+			p.Root,
+			depth,
+			humanize.Comma(int64(p.Stats.DirsWalked)),
+			humanize.Comma(int64(p.Stats.Projects)),
+			formatDur(p.Stats.ScanDuration),
+		)
+		if _, err := fmt.Fprintln(w, st.header.Render(scanLine)); err != nil {
 			return err
 		}
-	}
-	if _, err := fmt.Fprintln(w); err != nil {
-		return err
+		if !opts.NoSize {
+			sizeLine := fmt.Sprintf("Sizing %d targets… done, %s", len(deletes), formatDur(p.Stats.SizeDuration))
+			if _, err := fmt.Fprintln(w, st.header.Render(sizeLine)); err != nil {
+				return err
+			}
+		}
+		if _, err := fmt.Fprintln(w); err != nil {
+			return err
+		}
 	}
 
 	if len(deletes) == 0 && len(skips) == 0 && len(kept) == 0 {

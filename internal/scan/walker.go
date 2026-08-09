@@ -20,8 +20,13 @@ type Options struct {
 	MaxDepth         int
 	Concurrency      int
 	FollowSymlinks   bool
+	CrossDevice      bool     // when false (default), stay on the root's device
+	Exclude          []string // doublestar globs relative to Root
+	Frameworks       []string // CLI --framework allowlist
+	ExcludeFramework []string // CLI --exclude-framework denylist
 	IKnowWhatImDoing bool
-	NoConfig         bool // ignore .reclaim.yaml and global config
+	NoConfig         bool        // ignore .reclaim.yaml and global config
+	Warn             func(string) // optional verbose notes (e.g. skipped symlink cycles)
 }
 
 // CandidateKind classifies a walk finding before plan evaluation.
@@ -103,6 +108,17 @@ func Walk(opts Options) (*Result, error) {
 		return nil, fmt.Errorf("scan root is a symlink (pass --follow-symlinks to allow): %s", abs)
 	}
 
+	rootDev, err := fileDevice(abs, info)
+	if err != nil {
+		rootDev = 0
+	}
+	visited := map[fileID]struct{}{}
+	if opts.FollowSymlinks {
+		if id, err := fileIdentity(abs, info); err == nil {
+			visited[id] = struct{}{}
+		}
+	}
+
 	var (
 		rootChain    *config.Chain
 		globalConfig *config.Global
@@ -118,6 +134,10 @@ func Walk(opts Options) (*Result, error) {
 
 	cache := NewDirCache()
 	ctx := &detect.Context{Cache: cache}
+	warn := opts.Warn
+	if warn == nil {
+		warn = func(string) {}
+	}
 
 	res := &Result{Root: abs}
 	queue := []walkFrame{{dir: abs, depth: 0, parent: nil, control: rootChain}}
@@ -148,6 +168,31 @@ func Walk(opts Options) (*Result, error) {
 			continue
 		}
 		if !st.IsDir() && !isSymlink(st) {
+			continue
+		}
+		idInfo := st
+		if opts.FollowSymlinks && isSymlink(st) {
+			if resolved, err := cache.Stat(frame.dir); err == nil {
+				idInfo = resolved
+			}
+		}
+		if opts.FollowSymlinks {
+			if id, err := fileIdentity(frame.dir, idInfo); err == nil {
+				if _, seen := visited[id]; seen && frame.depth > 0 {
+					warn(fmt.Sprintf("skip symlink cycle: %s", frame.dir))
+					continue
+				}
+				visited[id] = struct{}{}
+			}
+		}
+		if !opts.CrossDevice && rootDev != 0 {
+			if dev, err := fileDevice(frame.dir, idInfo); err == nil && dev != rootDev {
+				warn(fmt.Sprintf("skip cross-device path: %s", frame.dir))
+				continue
+			}
+		}
+		if excludedPath(abs, frame.dir, opts.Exclude) {
+			warn(fmt.Sprintf("skip excluded path: %s", frame.dir))
 			continue
 		}
 
@@ -194,6 +239,7 @@ func Walk(opts Options) (*Result, error) {
 					only, disable = eff.FrameworksOnly, eff.FrameworksDisable
 				}
 			}
+			only, disable = mergeFrameworkFilters(opts.Frameworks, opts.ExcludeFramework, only, disable)
 			match, err := detect.DetectBestFiltered(ctx, frame.dir, only, disable)
 			if err != nil {
 				return nil, fmt.Errorf("detect %s: %w", frame.dir, err)
@@ -314,6 +360,10 @@ func Walk(opts Options) (*Result, error) {
 				continue
 			}
 			child := filepath.Join(frame.dir, name)
+			if excludedPath(abs, child, opts.Exclude) {
+				warn(fmt.Sprintf("skip excluded path: %s", child))
+				continue
+			}
 
 			if _, prune := pruneBasenames[name]; prune {
 				if _, local := localPrune[name]; local {
@@ -382,6 +432,32 @@ func Walk(opts Options) (*Result, error) {
 				target, err := cache.Stat(child)
 				if err != nil || !target.IsDir() {
 					continue
+				}
+			}
+			if !opts.CrossDevice && rootDev != 0 {
+				childInfo := info
+				if isSymlink(info) {
+					if st, err := cache.Stat(child); err == nil {
+						childInfo = st
+					}
+				}
+				if dev, err := fileDevice(child, childInfo); err == nil && dev != rootDev {
+					warn(fmt.Sprintf("skip cross-device path: %s", child))
+					continue
+				}
+			}
+			if opts.FollowSymlinks {
+				idInfo := info
+				if isSymlink(info) {
+					if st, err := cache.Stat(child); err == nil {
+						idInfo = st
+					}
+				}
+				if id, err := fileIdentity(child, idInfo); err == nil {
+					if _, seen := visited[id]; seen {
+						warn(fmt.Sprintf("skip symlink cycle: %s", child))
+						continue
+					}
 				}
 			}
 
@@ -574,4 +650,61 @@ func IsUnder(path, root string) bool {
 		return false
 	}
 	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
+func excludedPath(root, absPath string, patterns []string) bool {
+	if len(patterns) == 0 {
+		return false
+	}
+	rel, err := filepath.Rel(root, absPath)
+	if err != nil {
+		return false
+	}
+	rel = filepath.ToSlash(rel)
+	if rel == "." {
+		return false
+	}
+	for _, pat := range patterns {
+		pat = filepath.ToSlash(strings.TrimSpace(pat))
+		if pat == "" {
+			continue
+		}
+		if ok, _ := doublestar.Match(pat, rel); ok {
+			return true
+		}
+		// Also match when pattern is rooted at /
+		if strings.HasPrefix(pat, "/") {
+			if ok, _ := doublestar.Match(strings.TrimPrefix(pat, "/"), rel); ok {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func mergeFrameworkFilters(cliOnly, cliExclude, ctrlOnly, ctrlDisable []string) (only, disable []string) {
+	only = append([]string(nil), ctrlOnly...)
+	if len(cliOnly) > 0 {
+		if len(only) == 0 {
+			only = append([]string(nil), cliOnly...)
+		} else {
+			only = intersectStrings(only, cliOnly)
+		}
+	}
+	disable = append(append([]string(nil), ctrlDisable...), cliExclude...)
+	return only, disable
+}
+
+func intersectStrings(a, b []string) []string {
+	set := map[string]struct{}{}
+	for _, s := range b {
+		set[s] = struct{}{}
+	}
+	var out []string
+	for _, s := range a {
+		if _, ok := set[s]; ok {
+			out = append(out, s)
+		}
+	}
+	return out
 }

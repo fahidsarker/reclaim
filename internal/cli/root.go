@@ -19,6 +19,15 @@ type sharedFlags struct {
 	iKnowWhatImDoing bool
 	noConfig         bool
 	aggressive       bool
+	json             bool
+	followSymlinks   bool
+	crossDevice      bool
+	useGitBinary     bool
+	quiet            bool
+	verbose          int
+	frameworks       []string
+	excludeFramework []string
+	exclude          []string
 }
 
 func defaultConcurrency() int {
@@ -66,10 +75,22 @@ func newRootCmd() *cobra.Command {
 	pf.BoolVar(&f.iKnowWhatImDoing, "i-know-what-im-doing", false, "allow scanning / or $HOME")
 	pf.BoolVar(&f.noConfig, "no-config", false, "ignore all .reclaim.yaml and global config")
 	pf.BoolVar(&f.aggressive, "aggressive", false, "include SafetyRequiresFlag targets (Pods, venv, .terraform, …)")
+	pf.BoolVar(&f.json, "json", false, "machine-readable plan to stdout")
+	pf.BoolVar(&f.followSymlinks, "follow-symlinks", false, "traverse symlinked directories (cycle-guarded)")
+	pf.BoolVar(&f.crossDevice, "cross-device", false, "cross filesystem boundaries")
+	pf.BoolVar(&f.useGitBinary, "use-git-binary", false, "use git check-ignore for ignore matching")
+	pf.BoolVarP(&f.quiet, "quiet", "q", false, "errors only")
+	pf.CountVarP(&f.verbose, "verbose", "v", "per-decision reasoning (repeatable: -vv)")
+	pf.StringSliceVarP(&f.frameworks, "framework", "f", nil, "restrict to named detectors (repeatable)")
+	pf.StringSliceVar(&f.excludeFramework, "exclude-framework", nil, "denylist detectors (repeatable)")
+	pf.StringSliceVar(&f.exclude, "exclude", nil, "skip paths matching a glob (repeatable)")
 
 	cmd.AddCommand(newScanCmd(f))
 	cmd.AddCommand(newPlanCmd(f))
 	cmd.AddCommand(newVersionCmd())
+	cmd.AddCommand(newExplainCmd(f))
+	cmd.AddCommand(newInitCmd(f))
+	cmd.AddCommand(newDetectorsCmd(f))
 
 	return cmd
 }

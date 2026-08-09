@@ -70,7 +70,7 @@ func LoadUserSpecsFromDir(dir string, warn func(string)) int {
 			warn(fmt.Sprintf("user specs: skip %q: %v", name, err))
 			continue
 		}
-		Register(&SpecDetector{Spec: rs})
+		Register(&SpecDetector{Spec: rs, Source: SourceUser})
 		resolved = append(resolved, rs)
 		registered++
 	}
