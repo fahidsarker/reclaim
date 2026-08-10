@@ -1,0 +1,3 @@
+# Keep golden fixtures byte-stable across platforms (avoid CRLF on Windows).
+testdata/golden/** text eol=lf
+*.go text eol=lf
