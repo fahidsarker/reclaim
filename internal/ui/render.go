@@ -99,13 +99,9 @@ func Render(w io.Writer, p *plan.Plan, opts RenderOptions) error {
 	}
 
 	if !opts.Quiet {
-		depth := p.Stats.Depth
-		if depth == 0 && p.Stats.DirsWalked > 0 {
-			depth = 8
-		}
 		scanLine := fmt.Sprintf("Scanning %s (depth %d)… %s dirs, %s projects, %s",
 			p.Root,
-			depth,
+			p.Stats.Depth,
 			humanize.Comma(int64(p.Stats.DirsWalked)),
 			humanize.Comma(int64(p.Stats.Projects)),
 			formatDur(p.Stats.ScanDuration),

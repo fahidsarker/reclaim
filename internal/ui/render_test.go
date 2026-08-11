@@ -171,3 +171,23 @@ func TestRender_NoSizeOmitsSizeColumns(t *testing.T) {
 		t.Fatalf("want path-sorted projects:\n%s", out)
 	}
 }
+
+func TestRender_DepthZero(t *testing.T) {
+	p := &plan.Plan{
+		Root: "/tmp/code",
+		Stats: plan.Stats{
+			DirsWalked: 1,
+			Projects:   1,
+			Depth:      0,
+		},
+	}
+	var buf bytes.Buffer
+	color := false
+	if err := ui.Render(&buf, p, ui.RenderOptions{NoSize: true, NoColor: true, Color: &color}); err != nil {
+		t.Fatal(err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "Scanning /tmp/code (depth 0)…") {
+		t.Fatalf("want depth 0 in scan header:\n%s", out)
+	}
+}
