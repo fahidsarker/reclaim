@@ -4,20 +4,34 @@ A Go CLI that walks a directory tree, finds regenerable build artifacts and depe
 
 Behaviour detail: [spec.md](spec.md). Implementation history: [build-plan.md](build-plan.md). Releases: [CHANGELOG.md](CHANGELOG.md).
 
-## Install
+## Why?
+
+You spin up a project, build it, then move on. Months later `node_modules`, `target`, `.next`, and friends are still sitting there — regenerable junk from forgotten trees, quietly eating disk. reclaim finds those artifacts under real projects and frees the space safely.
+
+## Download
+
+Grab a binary from the [latest GitHub release](https://github.com/fahidsarker/reclaim/releases/latest). Pick the archive for your OS and architecture:
+
+| Platform | Archive |
+|---|---|
+| macOS (Apple Silicon) | `reclaim_*_darwin_arm64.tar.gz` |
+| macOS (Intel) | `reclaim_*_darwin_amd64.tar.gz` |
+| Linux (amd64) | `reclaim_*_linux_amd64.tar.gz` |
+| Linux (arm64) | `reclaim_*_linux_arm64.tar.gz` |
+| Windows (amd64) | `reclaim_*_windows_amd64.zip` |
+| Windows (arm64) | `reclaim_*_windows_arm64.zip` |
+
+Example (macOS Apple Silicon, v0.1.0):
 
 ```sh
-go install github.com/fahid/reclaim/cmd/reclaim@v0.1.0
+curl -fsSL -o reclaim.tar.gz \
+  https://github.com/fahidsarker/reclaim/releases/download/v0.1.0/reclaim_0.1.0_darwin_arm64.tar.gz
+tar -xzf reclaim.tar.gz
+sudo mv reclaim /usr/local/bin/   # or anywhere on PATH
+reclaim version
 ```
 
-Or build from a checkout (embeds the release version via ldflags):
-
-```sh
-make build
-./bin/reclaim version   # 0.1.0
-```
-
-`go run` without ldflags prints `0.1.0-dev`.
+To build from source, see [Development](#development).
 
 ## Quickstart
 
